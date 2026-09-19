@@ -11,8 +11,8 @@ Deferred to Phase 2 (surfaced honestly by measure()):
                            of the allowed domains; it lands with the tunnel module.
 
 The blocklists here are intentionally small and legible. In a later phase these
-can be sourced from the Pi-hole lists already running on the wg-hub, rather than
-duplicated. For now they demonstrate the mechanism end to end.
+can be sourced from a public blocklist the device fetches for itself. For now
+they demonstrate the mechanism end to end.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ _HOSTS = Path("/etc/hosts")
 _BEGIN = "# >>> umbra telemetry sinkhole >>>"
 _END = "# <<< umbra telemetry sinkhole <<<"
 
-# Curated, legible starter lists. Swap for the wg-hub Pi-hole lists later.
+# Curated, legible starter lists. Swap for a fetched public blocklist later.
 _BLOCKLISTS: dict[str, list[str]] = {
     "os": [
         # Common OS/vendor telemetry endpoints (illustrative, edit freely).

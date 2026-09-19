@@ -1,6 +1,10 @@
 """tunnel — force traffic through a tunnel and cut everything that isn't.
 
-Phase-2 controls (WireGuard mode, wired to the homevpn wg-hub):
+Umbra is a standalone, go-anywhere tool: the tunnel is ANY WireGuard endpoint you
+supply (a commercial VPN, a VPS you control - never assumed to be a home server),
+or Tor. It never phones home to a specific network.
+
+Phase-2 controls (WireGuard mode):
   * route       -- bring up the WireGuard interface via its systemd unit
                    (wg-quick@<profile_ref>.service).
   * killswitch  -- an nftables `umbra_egress` table with a default-DROP OUTPUT
@@ -17,8 +21,8 @@ handshaked.
 
 Honest limits (surfaced by measure()):
   * Tor mode routing/killswitch is Phase 2.1; only WireGuard is wired now.
-  * DNS (port 53) is permitted so a dynamic-hostname endpoint (e.g. DuckDNS) can
-    re-resolve on reconnect. A static-IP endpoint can tighten this later.
+  * DNS (port 53) is permitted so a dynamic-hostname endpoint can re-resolve on
+    reconnect. A static-IP endpoint can tighten this later.
   * WebRTC leak protection is a browser-level concern, not an OS firewall one; it
     is reported as advisory, not enforced here.
 """
@@ -65,7 +69,9 @@ class TunnelModule(Module):
     name = "tunnel"
 
     def _ref(self) -> str:
-        return self.config.get("profile_ref", "wg-hub")
+        # A generic name; the user drops ANY WireGuard config at
+        # /etc/wireguard/<ref>.conf. No home-network default.
+        return self.config.get("profile_ref", "vpn")
 
     def _route_unit(self) -> str | None:
         mode = self.config.get("mode", "off")
@@ -186,7 +192,7 @@ class TunnelModule(Module):
         host, port = parsed
         if re.match(r"^\d+\.\d+\.\d+\.\d+$", host):
             return host, port
-        # Resolve a hostname (e.g. DuckDNS) to its current IPv4.
+        # Resolve a hostname endpoint to its current IPv4.
         res = self.runner.run(["getent", "ahostsv4", host], read_only=True)
         if res.available and res.ok and res.stdout.strip():
             return res.stdout.split()[0], port

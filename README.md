@@ -11,6 +11,12 @@ exactly the way it was.
 > audit. True invisibility = radios off, and Umbra says so in plain language
 > rather than pretending otherwise.
 
+> **Standalone by design.** Umbra is a go-anywhere tool for a single device: you
+> operate the laptop from anywhere and harden/anonymize it with **no dependency on
+> and no connection back to any home network**. The tunnel is any endpoint *you*
+> supply (a commercial VPN, a VPS you control) or Tor — never a home server, since
+> phoning home would tie the device's traffic back to your identity.
+
 ## Status
 
 Phase 0 — specification and scaffold. Nothing here changes system state yet.

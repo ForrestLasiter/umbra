@@ -68,7 +68,7 @@ flowchart TD
     PKT["an outbound packet"] --> Q{umbra_egress<br/>OUTPUT chain}
     Q -->|loopback| A[accept]
     Q -->|established/related| A
-    Q -->|out the wg-hub interface| A
+    Q -->|out the vpn interface| A
     Q -->|to the WG endpoint IP:port| A
     Q -->|DNS / DHCP| A
     Q -->|anything else| D["DROP — no leak"]
@@ -79,14 +79,16 @@ flowchart TD
 If the tunnel drops, ordinary traffic has no path out — it hits the DROP policy
 instead of silently falling back to the naked internet. That's the whole point.
 
-### Wiring to your wg-hub
+### Any WireGuard endpoint you supply
 
-`tunnel.profile_ref: wg-hub` points at your existing homevpn WireGuard config at
-`/etc/wireguard/wg-hub.conf`. The module:
+Umbra is standalone: `tunnel.profile_ref: vpn` points at *any* WireGuard config
+you drop at `/etc/wireguard/vpn.conf` — a commercial VPN, or a VPS you control.
+It's never assumed to be a home server (tunnelling back home would tie the
+laptop's traffic to your home identity — the opposite of the goal). The module:
 
 1. reads the `Endpoint = host:port` line (`_endpoint_from_conf`, a pure function),
-2. resolves a hostname (your DuckDNS name) to an IP so the firewall can allow it,
-3. brings the interface up via `wg-quick@wg-hub.service`,
+2. resolves a hostname to an IP so the firewall can allow it,
+3. brings the interface up via `wg-quick@vpn.service`,
 4. installs the killswitch allowing that endpoint.
 
 ### Order within tunnel: route *then* killswitch
@@ -96,7 +98,7 @@ sequenceDiagram
     participant E as engine
     participant T as tunnel
     E->>T: apply route
-    T->>T: wg-quick@wg-hub up (tunnel is live)
+    T->>T: wg-quick@vpn up (tunnel is live)
     E->>T: apply killswitch
     T->>T: install umbra_egress (seal all other egress)
 ```
@@ -166,10 +168,10 @@ sudo umbra apply travel             # for real
 ```
 
 Then confirm:
-- `ip link show wg-hub` — interface is up.
+- `ip link show vpn` — interface is up.
 - `sudo nft list table inet umbra_egress` — the killswitch table exists.
-- `sudo wg-quick down wg-hub && curl -m5 https://example.com` — **fails** (killswitch
-  holds when the tunnel is down). Bring it back with `wg-quick up wg-hub`.
+- `sudo wg-quick down vpn && curl -m5 https://example.com` — **fails** (killswitch
+  holds when the tunnel is down). Bring it back with `wg-quick up vpn`.
 - `rfkill list` — bluetooth/wwan/nfc show `Soft blocked: yes`.
 - `ip link | grep -A2 wlan` then reconnect — a randomized MAC.
 

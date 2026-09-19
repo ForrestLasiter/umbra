@@ -23,7 +23,11 @@ modules:
   tunnel:
     enabled: true
     mode: wireguard
-    profile_ref: wg-hub
+    # Any WireGuard endpoint YOU supply: drop its config at /etc/wireguard/vpn.conf
+    # (a commercial VPN, a VPS you control). Umbra never assumes a home server.
+    # For maximum anonymity with no fixed endpoint at all, use the paranoid
+    # profile (mode: tor).
+    profile_ref: vpn
     killswitch: true
     dns: tunnel
     leak_guard: [dns, ipv6, webrtc]

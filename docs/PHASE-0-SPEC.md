@@ -81,7 +81,7 @@ modules:
   tunnel:
     enabled: true
     mode: wireguard                  # off | wireguard | tor
-    profile_ref: wg-hub              # named tunnel config (never inline secrets)
+    profile_ref: vpn                 # any WireGuard config you supply (never inline secrets)
     killswitch: true                 # drop all non-tunnel egress
     dns: tunnel                      # tunnel | doh | dot
     leak_guard: [dns, ipv6, webrtc]
@@ -282,12 +282,12 @@ Every mutating command:
 
 ## 7. Open questions to resolve entering Phase 1
 
-1. Engine language: **Python** (fast to build, matches reconlens/homevpn) vs.
-   **Rust** (hardened daemon). Leaning Python for the engine now, Rust for a
-   privileged helper later.
+1. Engine language: **Python** (fast to build) vs. **Rust** (hardened daemon).
+   Leaning Python for the engine now, Rust for a privileged helper later.
 2. Privilege model: run-as-root CLI first; polkit action + unprivileged client
    later.
-3. Tunnel reuse: bind `tunnel.profile_ref: wg-hub` directly to the existing
-   `homevpn` WireGuard peer config, or wrap it.
-4. Blocklist source: ship curated lists vs. reuse the Pi-hole lists already on
-   `wg-hub`.
+3. Tunnel: **standalone by design** — `tunnel.profile_ref` names ANY WireGuard
+   config the user supplies (a commercial VPN, a VPS they control), or Tor. Umbra
+   never assumes or depends on a specific home network.
+4. Blocklist source: ship curated lists vs. fetch a public blocklist the device
+   pulls for itself (no external dependency assumed).
