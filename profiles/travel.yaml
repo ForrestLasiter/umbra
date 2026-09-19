@@ -14,7 +14,7 @@ modules:
     enabled: true
     mac_randomization: per-network
     suppress_probe_requests: true
-    bluetooth: off
+    bluetooth: "off"      # quoted: bare off/on are YAML booleans
     radios: [wifi]
   netdark:
     enabled: true

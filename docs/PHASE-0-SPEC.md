@@ -119,7 +119,7 @@ Every module implements one interface. Controls are enumerated so the engine can
 reason about them individually.
 
 ```python
-# engine/modules/base.py  (contract — see file for the runnable stub)
+# umbra/modules/base.py  (contract — see file for the runnable stub)
 
 class Module(Protocol):
     name: str                       # "rf" | "netdark" | "tunnel" | "telemetry"

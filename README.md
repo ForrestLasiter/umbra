@@ -54,9 +54,22 @@ umbra/
   docs/            specs (start here)
   profiles/        posture definitions (YAML)
   schema/          JSON Schema for profiles + state snapshots
-  engine/          the privileged reconciler
+  umbra/           the Python package (installable, entrypoint `umbra`)
+    engine.py      the reconciler
+    profiles.py    load + validate + merge posture YAML
+    snapshots.py   crash-safe transactions
+    restore.py     the audited restore primitives
+    runner.py      the one shim all external commands go through
     modules/       rf, netdark, tunnel, telemetry (idempotent)
-    state/         per-module snapshots for clean revert
-  audit/           leak tests + posture scanner
-  cli/             `umbra` entrypoint
+    cli.py         `umbra` entrypoint
+  engine/state/    runtime snapshots for clean revert (git-ignored)
+  tests/           unit tests (run on any OS)
+```
+
+## Install (dev)
+
+```bash
+python -m venv .venv && . .venv/bin/activate
+pip install -e .
+umbra --help
 ```

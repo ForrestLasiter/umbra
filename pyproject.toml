@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "umbra"
+version = "0.1.0"
+description = "One-toggle privacy/anonymity/hardening posture engine for Linux"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Forrest Lasiter" }]
+dependencies = [
+    "PyYAML>=6.0",
+    "jsonschema>=4.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+# This makes `umbra` a command on your PATH after `pip install -e .`.
+# It calls the `main()` function in umbra/cli.py.
+umbra = "umbra.cli:main"
+
+[tool.setuptools]
+packages = ["umbra", "umbra.modules"]
+
+[tool.setuptools.package-data]
+# Ship the JSON Schema and the stock profiles inside the installed package.
+umbra = ["../schema/*.json", "../profiles/*.yaml"]
