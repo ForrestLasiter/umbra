@@ -78,6 +78,12 @@ exit 0
 EOF
 chmod 0755 "$STAGE/DEBIAN/postinst"
 
+# Normalize permissions: dpkg-deb requires DEBIAN/ and dirs to be 0755, but a
+# restrictive root umask (e.g. 027 on hardened Kali) yields 0750. Set them.
+find "$STAGE" -type d -exec chmod 0755 {} +
+find "$STAGE" -type f -exec chmod 0644 {} +
+chmod 0755 "$STAGE/usr/bin/umbra" "$STAGE/DEBIAN/prerm" "$STAGE/DEBIAN/postinst"
+
 mkdir -p "$SRC/dist"
 DEB="$SRC/dist/umbra_${VERSION}_${ARCH}.deb"
 dpkg-deb --root-owner-group --build "$STAGE" "$DEB"
