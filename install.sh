@@ -39,6 +39,10 @@ cat > "$BIN" <<EOF
 exec /usr/bin/env PYTHONPATH="$PREFIX" python3 -m umbra.cli "\$@"
 EOF
 chmod 0755 "$BIN"
+# umbra is a root tool, almost always run as `sudo umbra ...`. On some images
+# sudo's secure_path excludes /usr/local/bin, so also expose it under /usr/sbin
+# (which is in secure_path) via a symlink, so `sudo umbra` always resolves.
+ln -sf "$BIN" /usr/sbin/umbra
 
 # man page (best-effort)
 if [ -f "$SRC/packaging/umbra.1" ] && [ -d /usr/share/man/man1 ]; then

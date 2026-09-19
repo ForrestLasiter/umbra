@@ -21,6 +21,13 @@ def test_installer_creates_wrapper_and_uses_pythonpath():
     assert "python3 -m umbra.cli" in sh
     assert "PYTHONPATH" in sh
     assert "--with-boot-service" in sh
+    # `sudo umbra` must resolve even where secure_path lacks /usr/local/bin.
+    assert "/usr/sbin/umbra" in sh
+
+
+def test_uninstaller_removes_both_wrapper_locations():
+    sh = _read("uninstall.sh")
+    assert "/usr/local/bin/umbra" in sh and "/usr/sbin/umbra" in sh
 
 
 def test_uninstaller_restores_posture_before_removing_code():

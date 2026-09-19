@@ -16,7 +16,8 @@ rm -f /etc/systemd/system/umbra-boot.service
 systemctl daemon-reload >/dev/null 2>&1 || true
 
 echo "[3/4] remove code + wrapper"
-rm -f /usr/local/bin/umbra
+rm -f /usr/local/bin/umbra /usr/sbin/umbra
+rm -f /usr/share/man/man1/umbra.1
 rm -rf /opt/umbra
 
 echo "[4/4] leaving /etc/umbra and /var/lib/umbra (config + snapshots) intact"
