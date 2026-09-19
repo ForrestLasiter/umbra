@@ -232,15 +232,25 @@ class NetdarkModule(Module):
 
     def _unit_state(self, unit: str) -> tuple[bool, bool, bool] | None:
         """Return (exists, active, enabled) for a unit, or None if systemctl is
-        unavailable on this host."""
-        a = self.runner.run(["systemctl", "is-active", unit], read_only=True)
-        if not a.available:
+        unavailable on this host.
+
+        Uses `systemctl show` LoadState/ActiveState/UnitFileState -- the reliable
+        way to tell "not installed" (LoadState=not-found) from "installed but
+        stopped". `is-active` alone can't distinguish the two.
+        """
+        r = self.runner.run(
+            ["systemctl", "show", "-p", "LoadState", "-p", "ActiveState",
+             "-p", "UnitFileState", unit],
+            read_only=True,
+        )
+        if not r.available:
             return None
-        text = (a.stdout + a.stderr).lower()
-        exists = "could not be found" not in text and "not-found" not in text
-        active = a.stdout.strip() == "active"
-        e = self.runner.run(["systemctl", "is-enabled", unit], read_only=True)
-        enabled = e.stdout.strip() == "enabled"
+        props = dict(
+            line.split("=", 1) for line in r.stdout.splitlines() if "=" in line
+        )
+        exists = props.get("LoadState", "not-found") != "not-found"
+        active = props.get("ActiveState", "") == "active"
+        enabled = props.get("UnitFileState", "") == "enabled"
         return exists, active, enabled
 
 
