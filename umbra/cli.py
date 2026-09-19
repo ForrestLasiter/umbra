@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 
 from umbra import __version__, snapshots
 from umbra.audit import run_audit
@@ -159,21 +160,36 @@ def cmd_restore(args, runner: Runner) -> int:
     return 0
 
 
+_AUDIT_GLYPH = {
+    "ok": "OK ", "warn": "!! ", "fail": "XX ", "info": ".. ", "na": "?? ",
+}
+
+
 def cmd_audit(args, runner: Runner) -> int:
+    from dataclasses import asdict
+    from umbra.report import render_html
+
     profile = load_profile(args.profile or "home", args.profiles_dir)
     report = run_audit(runner, profile)
+
+    if args.html:
+        Path(args.html).write_text(render_html(report), encoding="utf-8")
+        print(f"wrote HTML posture dashboard -> {args.html}")
+
     if args.json:
-        print(json.dumps(report.__dict__, indent=2))
+        print(json.dumps(asdict(report), indent=2, default=str))
         return 0
-    print(f"audit vs '{profile.name}':\n")
-    for control, compliance in report.per_control.items():
-        print(f"  {_GLYPH.get(compliance, '?')} {control}")
-    print(f"\n  default route: {report.default_route or '(unknown)'}")
-    print(f"  listening TCP: {len(report.listening_tcp)} socket(s)")
-    for sock in report.listening_tcp:
-        print(f"    - {sock}")
-    for note in report.notes:
-        print(f"  note: {note}")
+
+    counts = report.counts()
+    print(f"audit vs '{profile.name}'  "
+          f"[ok {counts['ok']} · warn {counts['warn']} · fail {counts['fail']} · "
+          f"info {counts['info']} · na {counts['na']}]\n")
+    for c in report.checks:
+        print(f"  {_AUDIT_GLYPH.get(c.status.value, '?')} {c.title}")
+        if c.evidence:
+            print(f"        {c.evidence}")
+        if c.recommendation and c.status.value in ("warn", "fail"):
+            print(f"        -> {c.recommendation}")
     return 0
 
 
@@ -222,6 +238,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("audit", help="read-only proof of posture")
     sp.add_argument("profile", nargs="?", help="profile to audit against (default: home)")
+    sp.add_argument("--html", metavar="PATH", default=None,
+                    help="also write an accessible HTML posture dashboard to PATH")
     return p
 
 
