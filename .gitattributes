@@ -1,0 +1,4 @@
+# Linux-target project: keep LF in the repo regardless of host OS.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
