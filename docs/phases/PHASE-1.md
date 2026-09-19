@@ -167,7 +167,7 @@ runner.run(["nft", "-f", "-"], read_only=False, input_text=RULES) #    install s
 
 | Module | Real Phase-1 controls | Deferred (surfaced honestly) |
 |--------|----------------------|------------------------------|
-| **netdark** | DROP firewall, silence avahi (mDNS) + nmbd (NetBIOS), IPv6 temp addrs | llmnr, ssdp_upnp, wsd → "Phase 1.5" |
+| **netdark** | DROP firewall, silence avahi (mDNS) + nmbd (NetBIOS), IPv6 temp addrs | llmnr, ssdp_upnp, wsd → completed in [Phase 5](PHASE-5.md) |
 | **telemetry** | `/etc/hosts` DNS sinkhole, disable OS telemetry units | egress allowlist → Phase 2 (tunnel) |
 | **rf**, **tunnel** | *(declared stubs — status lists them, they never act)* | whole module → Phase 2 |
 

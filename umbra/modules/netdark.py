@@ -1,29 +1,30 @@
-"""netdark — make the machine silent and unresponsive on the local network.
+"""netdark - make the machine silent and unresponsive on the local network.
 
-Phase-1 controls:
+Controls:
   * inbound_policy  -- replace the nftables ruleset with a default-DROP stealth
                        firewall (no ping reply, no RST: you don't answer at all).
-  * mdns / netbios  -- stop+disable the daemons that announce you (avahi, nmbd).
-  * ipv6_privacy    -- use temporary IPv6 addresses instead of a stable, trackable one.
+  * ipv6_privacy    -- prefer temporary IPv6 addresses over a stable, trackable one.
+  * discovery.<p>   -- silence each local-discovery protocol the profile requests:
+        mdns (avahi), netbios (nmbd), ssdp_upnp (miniupnpd/minissdpd),
+        wsd (wsdd)   -> stop+disable the announcing daemon if it is running;
+        llmnr        -> a systemd-resolved drop-in (LLMNR=no) when resolved is
+                        the active resolver.
 
-Requested-but-not-yet-implemented discovery keys (llmnr, ssdp_upnp, wsd) and
-block_listening_services are surfaced by measure() as UNSUPPORTED with a note,
-so `umbra status` tells the truth about what is and isn't enforced yet.
+Honest "already silent" semantics: a protocol whose announcer isn't installed (or
+isn't running) reports COMPLIANT with a note, not a deferred placeholder - there
+is simply nothing announcing it.
 
-Honest caveat baked into measure(): the DROP firewall replaces the *entire*
-nftables ruleset. If another tool (e.g. Docker) has rules loaded, they are
-suspended while dark and restored on `umbra normal`. plan()/status warn when
-foreign tables are present.
+Caveat baked into measure(): the DROP firewall replaces the entire nftables
+ruleset. Foreign rules (e.g. Docker) are suspended while dark and restored on
+`umbra normal`; measure()/status warn when foreign tables are present.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from umbra.modules.base import Action, Compliance, Control, Module, VerifyResult
 
-# The stealth ruleset. `umbra:managed` is our marker so measure() can recognise
-# its own work. Default policy DROP; allow only established/related, loopback,
-# and IPv6 neighbour discovery (so IPv6 keeps functioning). Nothing else is
-# answered -- pings included.
 _NFT_RULESET = """\
 table inet umbra {
 	chain input {
@@ -36,28 +37,35 @@ table inet umbra {
 }
 """
 _MARKER = "umbra:managed"
-
-# discovery config key -> systemd unit that announces on that protocol.
-_DISCOVERY_UNITS = {
-    "mdns": "avahi-daemon.service",
-    "netbios": "nmbd.service",
-}
-# Recognised but not yet enforced in Phase 1.
-_DISCOVERY_DEFERRED = {"llmnr", "ssdp_upnp", "wsd"}
-
 _IPV6_TEMPADDR_KEY = "net.ipv6.conf.all.use_tempaddr"
+_RESOLVED_DROPIN = Path("/etc/systemd/resolved.conf.d/umbra-llmnr.conf")
+_RESOLVED_CONTENT = "# Managed by umbra (netdark).\n[Resolve]\nLLMNR=no\nMulticastDNS=no\n"
+
+# Each discovery protocol -> the daemon(s) that announce it. llmnr is special:
+# it is emitted by systemd-resolved itself, handled via a config drop-in.
+_DISCOVERY_UNITS = {
+    "mdns": ["avahi-daemon.service"],
+    "netbios": ["nmbd.service"],
+    "ssdp_upnp": ["miniupnpd.service", "minissdpd.service"],
+    "wsd": ["wsdd.service"],
+}
 
 
 class NetdarkModule(Module):
     name = "netdark"
+
+    def _requested_discovery(self) -> list[str]:
+        disc = self.config.get("discovery", {}) or {}
+        return [k for k, v in disc.items() if v]
 
     def controls(self) -> list[Control]:
         ctrls = [
             Control("netdark.inbound_policy", "Stealth firewall (default DROP)", "nftables_replace"),
             Control("netdark.ipv6_privacy", "IPv6 temporary addresses", "sysctl_set"),
         ]
-        for key, unit in _DISCOVERY_UNITS.items():
-            ctrls.append(Control(f"netdark.{key}", f"Silence {key} ({unit})", "systemd_unit"))
+        for proto in self._requested_discovery():
+            method = "file_replace" if proto == "llmnr" else "systemd_unit"
+            ctrls.append(Control(f"netdark.{proto}", f"Silence {proto}", method))
         return ctrls
 
     # --- measure -------------------------------------------------------------
@@ -68,19 +76,12 @@ class NetdarkModule(Module):
         states: dict[str, ControlState] = {}
         if not self.enabled:
             return states
-
         states["netdark.inbound_policy"] = self._measure_firewall()
         states["netdark.ipv6_privacy"] = self._measure_sysctl()
-        for key, unit in _DISCOVERY_UNITS.items():
-            if self.config.get("discovery", {}).get(key):
-                states[f"netdark.{key}"] = self._measure_unit(key, unit)
-        # Surface the deferred ones honestly.
-        for key in _DISCOVERY_DEFERRED:
-            if self.config.get("discovery", {}).get(key):
-                states[f"netdark.{key}"] = ControlState(
-                    f"netdark.{key}", Compliance.UNSUPPORTED,
-                    detail="requested; enforcement lands in Phase 1.5",
-                )
+        for proto in self._requested_discovery():
+            states[f"netdark.{proto}"] = (
+                self._measure_llmnr() if proto == "llmnr" else self._measure_units(proto)
+            )
         return states
 
     def _measure_firewall(self) -> "ControlState":  # noqa: F821
@@ -93,13 +94,12 @@ class NetdarkModule(Module):
                                 detail="nft not available on this host")
         managed = _MARKER in res.stdout
         foreign = _has_foreign_tables(res.stdout)
-        detail = "foreign nftables rules present; suspended while dark" if foreign else ""
         compliant = managed if want_drop else not managed
         return ControlState(
             "netdark.inbound_policy",
             Compliance.COMPLIANT if compliant else Compliance.DRIFT,
             observed={"managed": managed, "foreign_tables": foreign},
-            detail=detail,
+            detail="foreign nftables rules present; suspended while dark" if foreign else "",
         )
 
     def _measure_sysctl(self) -> "ControlState":  # noqa: F821
@@ -117,52 +117,71 @@ class NetdarkModule(Module):
             observed={"use_tempaddr": value},
         )
 
-    def _measure_unit(self, key: str, unit: str) -> "ControlState":  # noqa: F821
+    def _measure_units(self, proto: str) -> "ControlState":  # noqa: F821
         from umbra.modules.base import ControlState
 
-        active = self.runner.run(["systemctl", "is-active", unit], read_only=True)
-        if not active.available:
-            return ControlState(f"netdark.{key}", Compliance.UNKNOWN)
-        # A unit that doesn't exist on this host is already "silent" -> compliant.
-        if "could not be found" in (active.stderr + active.stdout).lower():
-            return ControlState(f"netdark.{key}", Compliance.UNSUPPORTED,
-                                detail=f"{unit} not installed")
-        is_running = active.stdout.strip() == "active"
-        return ControlState(
-            f"netdark.{key}",
-            Compliance.DRIFT if is_running else Compliance.COMPLIANT,
-            observed={"active": is_running},
-        )
+        cid = f"netdark.{proto}"
+        active, exists_any, unavailable = [], False, False
+        for unit in _DISCOVERY_UNITS[proto]:
+            state = self._unit_state(unit)
+            if state is None:
+                unavailable = True
+                continue
+            exists, is_active, _ = state
+            exists_any = exists_any or exists
+            if is_active:
+                active.append(unit)
+        if unavailable and not active:
+            return ControlState(cid, Compliance.UNKNOWN, detail="systemctl unavailable")
+        if active:
+            return ControlState(cid, Compliance.DRIFT, observed={"active": active},
+                                detail="announcing: " + ", ".join(active))
+        detail = "no announcer installed (already silent)" if not exists_any else "installed but inactive"
+        return ControlState(cid, Compliance.COMPLIANT, detail=detail)
+
+    def _measure_llmnr(self) -> "ControlState":  # noqa: F821
+        from umbra.modules.base import ControlState
+
+        state = self._unit_state("systemd-resolved.service")
+        if state is None:
+            return ControlState("netdark.llmnr", Compliance.UNKNOWN, detail="systemctl unavailable")
+        _, active, _ = state
+        if not active:
+            return ControlState("netdark.llmnr", Compliance.COMPLIANT,
+                                detail="systemd-resolved inactive; LLMNR not emitted")
+        silenced = _RESOLVED_DROPIN.exists() and "LLMNR=no" in _RESOLVED_DROPIN.read_text()
+        return ControlState("netdark.llmnr",
+                            Compliance.COMPLIANT if silenced else Compliance.DRIFT,
+                            detail="resolved drop-in disables LLMNR" if silenced else "")
 
     # --- plan ----------------------------------------------------------------
 
     def plan(self) -> list[Action]:
         if not self.enabled:
             return []
-        actions: list[Action] = []
-        states = self.measure()
-        for control, state in states.items():
-            if state.compliance is Compliance.DRIFT:
-                actions.append(Action(control, self.config, reason=state.detail or "drift"))
-        return actions
+        return [
+            Action(control, self.config, reason=state.detail or "drift")
+            for control, state in self.measure().items()
+            if state.compliance is Compliance.DRIFT
+        ]
 
     # --- apply ---------------------------------------------------------------
 
     def apply(self, action: Action, snap) -> None:
-        if action.control == "netdark.inbound_policy":
+        control = action.control
+        if control == "netdark.inbound_policy":
             self._apply_firewall(snap)
-        elif action.control == "netdark.ipv6_privacy":
+        elif control == "netdark.ipv6_privacy":
             self._apply_sysctl(snap)
-        elif action.control in {f"netdark.{k}" for k in _DISCOVERY_UNITS}:
-            key = action.control.split(".", 1)[1]
-            self._apply_unit(key, _DISCOVERY_UNITS[key], snap)
+        elif control == "netdark.llmnr":
+            self._apply_llmnr(snap)
+        elif control.startswith("netdark."):
+            self._apply_units(control.split(".", 1)[1], snap)
 
     def _apply_firewall(self, snap) -> None:
-        # 1) snapshot the COMPLETE prior ruleset (full-state restore, spec §4).
         prior = self.runner.run(["nft", "list", "ruleset"], read_only=True)
         snap.record("netdark.inbound_policy", "nftables_replace",
                     {"ruleset": prior.stdout if prior.available else ""})
-        # 2) replace it with our stealth ruleset.
         self.runner.run(["nft", "flush", "ruleset"], read_only=False, check=True)
         self.runner.run(["nft", "-f", "-"], read_only=False, check=True, input_text=_NFT_RULESET)
 
@@ -172,34 +191,60 @@ class NetdarkModule(Module):
                     {"key": _IPV6_TEMPADDR_KEY, "value": prior.stdout.strip() or "0"})
         self.runner.run(["sysctl", "-w", f"{_IPV6_TEMPADDR_KEY}=2"], read_only=False, check=True)
 
-    def _apply_unit(self, key: str, unit: str, snap) -> None:
-        enabled = self.runner.run(["systemctl", "is-enabled", unit], read_only=True)
-        active = self.runner.run(["systemctl", "is-active", unit], read_only=True)
-        snap.record(f"netdark.{key}", "systemd_unit", {
-            "unit": unit,
-            "was_enabled": enabled.stdout.strip() == "enabled",
-            "was_active": active.stdout.strip() == "active",
-        })
-        self.runner.run(["systemctl", "disable", "--now", unit], read_only=False)
+    def _apply_units(self, proto: str, snap) -> None:
+        for unit in _DISCOVERY_UNITS.get(proto, []):
+            state = self._unit_state(unit)
+            if state is None:
+                continue
+            exists, is_active, enabled = state
+            if not is_active:
+                continue
+            stem = unit.rsplit(".", 1)[0]
+            # Distinct control id per unit so each gets its own snapshot file.
+            snap.record(f"netdark.{proto}_{stem}", "systemd_unit",
+                        {"unit": unit, "was_enabled": enabled, "was_active": True})
+            self.runner.run(["systemctl", "disable", "--now", unit], read_only=False)
 
-    # --- verify --------------------------------------------------------------
+    def _apply_llmnr(self, snap) -> None:
+        existed = _RESOLVED_DROPIN.exists()
+        snap.record("netdark.llmnr", "file_replace", {
+            "path": str(_RESOLVED_DROPIN),
+            "existed": existed,
+            "content": _RESOLVED_DROPIN.read_text() if existed else "",
+        })
+        _RESOLVED_DROPIN.parent.mkdir(parents=True, exist_ok=True)
+        _RESOLVED_DROPIN.write_text(_RESOLVED_CONTENT)
+        # Pick up the drop-in now. (Restore removes the file; LLMNR fully reverts
+        # on the next resolved restart / reboot.)
+        self.runner.run(["systemctl", "restart", "systemd-resolved"], read_only=False)
+
+    # --- verify / restore ----------------------------------------------------
 
     def verify(self, action: Action) -> VerifyResult:
         state = self.measure().get(action.control)
         ok = state is not None and state.compliance is Compliance.COMPLIANT
         return VerifyResult(action.control, ok, state.detail if state else "no state")
 
-    # --- restore -------------------------------------------------------------
-
     def restore(self, snap) -> None:
-        # The engine drives restore via the snapshot primitives; nothing extra
-        # is needed here for Phase-1 controls (firewall/sysctl/units all restore
-        # from their recorded prior state alone).
         return None
+
+    # --- helpers -------------------------------------------------------------
+
+    def _unit_state(self, unit: str) -> tuple[bool, bool, bool] | None:
+        """Return (exists, active, enabled) for a unit, or None if systemctl is
+        unavailable on this host."""
+        a = self.runner.run(["systemctl", "is-active", unit], read_only=True)
+        if not a.available:
+            return None
+        text = (a.stdout + a.stderr).lower()
+        exists = "could not be found" not in text and "not-found" not in text
+        active = a.stdout.strip() == "active"
+        e = self.runner.run(["systemctl", "is-enabled", unit], read_only=True)
+        enabled = e.stdout.strip() == "enabled"
+        return exists, active, enabled
 
 
 def _has_foreign_tables(ruleset: str) -> bool:
-    """True if the live ruleset contains a table other than ours."""
     for line in ruleset.splitlines():
         line = line.strip()
         if line.startswith("table ") and "umbra" not in line:
