@@ -19,6 +19,7 @@ from umbra.runner import Runner
 # The closed set. A snapshot whose restore_method is not in here is refused.
 RESTORE_PRIMITIVES: frozenset[str] = frozenset({
     "nftables_replace",
+    "nftables_table_delete",
     "nmcli_set",
     "rfkill_set",
     "systemd_unit",
@@ -35,6 +36,24 @@ def _nftables_replace(runner: Runner, prior: dict) -> None:
     runner.run(["nft", "flush", "ruleset"], read_only=False, check=True)
     if ruleset.strip():
         runner.run(["nft", "-f", "-"], read_only=False, check=True, input_text=ruleset)
+
+
+def _nftables_table_delete(runner: Runner, prior: dict) -> None:
+    """Delete one table a module ADDED without flushing the whole ruleset.
+
+    Used by the tunnel killswitch, which layers its own `umbra_egress` table on
+    top of whatever netdark left, instead of replacing the entire ruleset. Undo
+    is just "remove our table"; missing is fine (idempotent), so check=False.
+    """
+    family, table = prior["family"], prior["table"]
+    runner.run(["nft", "delete", "table", family, table], read_only=False, check=False)
+
+
+def _rfkill_set(runner: Runner, prior: dict) -> None:
+    """Return a radio to its prior soft-block state."""
+    identifier = prior["identifier"]        # e.g. "bluetooth", "wifi", "wwan"
+    action = "block" if prior.get("was_blocked") else "unblock"
+    runner.run(["rfkill", action, identifier], read_only=False, check=False)
 
 
 def _systemd_unit(runner: Runner, prior: dict) -> None:
@@ -81,12 +100,15 @@ def _not_yet(name: str):
 
 _DISPATCH = {
     "nftables_replace": _nftables_replace,
+    "nftables_table_delete": _nftables_table_delete,
     "systemd_unit": _systemd_unit,
     "sysctl_set": _sysctl_set,
     "file_replace": _file_replace,
     "hosts_replace": _hosts_replace,
+    "rfkill_set": _rfkill_set,
+    # nmcli MAC changes restore via file_replace of the NetworkManager drop-in,
+    # so no dedicated nmcli_set primitive is needed yet.
     "nmcli_set": _not_yet("nmcli_set"),
-    "rfkill_set": _not_yet("rfkill_set"),
 }
 
 
