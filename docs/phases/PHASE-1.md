@@ -21,8 +21,11 @@ flowchart LR
     X --> B
 ```
 
-This is why `umbra normal` needs no special code: "stock" is just a profile where
-everything is off, and reconciling to it replays the undo snapshots.
+Undo is the mirror image: `umbra normal` returns you to stock by **replaying the
+active transaction's snapshots** in reverse — it does not "reconcile to an all-off
+profile" (a disabled module plans nothing, so that would revert nothing). The
+prior firewall ruleset, the old `/etc/hosts`, the old sysctl value — those live
+only in the snapshots, so undo means *restore*, not *reconcile*.
 
 ---
 

@@ -31,8 +31,12 @@ current posture ┘        measure() → if drift → snapshot() → apply() →
 ```
 
 The engine never blindly applies. It measures, acts only on drift, verifies the
-result, and records enough to undo. `normal` is simply the profile that turns
-every control off — i.e. "restore everything".
+result, and records enough to undo. `umbra normal` restores the machine to stock
+by **replaying the active transaction's snapshots** (the reverse path), not by
+applying an all-off profile — a disabled module measures and plans nothing, so it
+cannot revert anything. Prior values live only in the snapshots, so undo is
+restore, not reconcile. (The `normal` profile still exists as a status/plan
+target.)
 
 ---
 
@@ -251,7 +255,7 @@ arbitrary shell string — restore is data, not code.
 ```
 umbra status                 # current posture vs. active profile, green/red per control
 umbra apply <profile>        # reconcile to a profile  (alias: umbra <profile>)
-umbra normal                 # restore to stock (apply the normal profile)
+umbra normal                 # restore to stock (replay the active tx's snapshots)
 umbra restore [--tx <id>]    # explicit restore of a transaction (default: current)
 umbra audit                  # run leak tests + posture scan (read-only)
 umbra plan <profile>         # dry-run: print the actions without applying

@@ -124,9 +124,27 @@ def cmd_apply(args, runner: Runner) -> int:
 
 
 def cmd_normal(args, runner: Runner) -> int:
-    args.profile = "normal"
-    args.confirm = True     # returning to stock never needs a safety gate
-    return cmd_apply(args, runner)
+    """Return the machine to stock by REPLAYING the active transaction's
+    snapshots -- not by applying an all-off profile.
+
+    Prior state (the exact old firewall ruleset, the old /etc/hosts, the old
+    sysctl value) only exists in the snapshots, so undo means restore, not
+    reconcile. A disabled module measures/plans nothing, which is why applying
+    the `normal` profile is a no-op and cannot revert anything.
+    """
+    _require_privilege(runner.dry_run)
+    tx = snapshots.current_transaction_id()
+    if tx is None:
+        print("nothing to restore; no active umbra posture.")
+        return 0
+    failed = Engine(runner).restore(tx)
+    if failed:
+        print("restore completed with failures:")
+        for control in failed:
+            print("  !", control)
+        return 1
+    print(f"restored to stock (undid tx {tx}).")
+    return 0
 
 
 def cmd_restore(args, runner: Runner) -> int:
