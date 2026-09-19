@@ -45,8 +45,9 @@ def test_boot_service_is_a_oneshot_that_applies_and_reverts():
     assert "Type=oneshot" in unit
     assert "apply" in unit and "boot-profile" in unit
     # method-agnostic: bare `umbra` via sh -c works for both .deb and install.sh
-    assert "umbra normal" in unit
-    assert "/usr/local/bin/umbra" not in unit  # no hardcoded path
+    assert "ExecStop=/bin/sh -c 'umbra normal'" in unit
+    exec_lines = [ln for ln in unit.splitlines() if ln.startswith("Exec")]
+    assert exec_lines and not any("/usr/local/bin" in ln for ln in exec_lines)
     assert "WantedBy=multi-user.target" in unit
 
 
