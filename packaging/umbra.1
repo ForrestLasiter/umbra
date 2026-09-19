@@ -1,0 +1,60 @@
+.TH UMBRA 1 "2026-09-18" "umbra 0.1.0" "User Commands"
+.SH NAME
+umbra \- one-toggle privacy/anonymity/hardening posture engine
+.SH SYNOPSIS
+.B umbra
+.RI [ global-options ]
+.I command
+.RI [ args ]
+.SH DESCRIPTION
+.B umbra
+reconciles a Linux machine to a declarative privacy posture (a
+.IR profile )
+and can restore it exactly. Each change is snapshotted before it is applied, so
+any posture can be cleanly undone \(em even after a crash.
+.SH COMMANDS
+.TP
+.B list
+List available profiles.
+.TP
+.B status \fR[\fIprofile\fR]
+Show measured posture versus a profile (default: home).
+.TP
+.B plan \fIprofile\fR
+Show the actions an apply would take (no changes).
+.TP
+.B apply \fIprofile\fR
+Reconcile the machine to a profile. Fail-mode=closed profiles need \fB--confirm\fR.
+.TP
+.B normal
+Restore to stock by replaying the active transaction's snapshots.
+.TP
+.B restore \fR[\fB--tx\fI ID\fR]
+Restore a transaction (default: the current one).
+.TP
+.B audit \fR[\fIprofile\fR] [\fB--html\fI PATH\fR]
+Read-only proof of posture; optionally write an HTML dashboard.
+.SH GLOBAL OPTIONS
+.TP
+.B --dry-run
+Show mutations without performing them.
+.TP
+.B --json
+Machine-readable output where supported.
+.TP
+.B --confirm
+Acknowledge a fail-mode=closed apply.
+.SH FILES
+.TP
+.I /opt/umbra
+Installed code, profiles, and schema.
+.TP
+.I /var/lib/umbra/transactions
+Snapshot transactions used for restore.
+.TP
+.I /etc/umbra/boot-profile
+Profile applied at boot by umbra-boot.service.
+.SH EXIT STATUS
+0 on success; non-zero on failure or verification failure.
+.SH SEE ALSO
+Project documentation: https://github.com/ForrestLasiter/umbra

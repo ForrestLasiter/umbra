@@ -66,10 +66,21 @@ umbra/
   tests/           unit tests (run on any OS)
 ```
 
-## Install (dev)
+## Install
+
+**System (Kali/Debian):**
+
+```bash
+sudo ./install.sh                       # umbra on your PATH (uses apt for deps)
+sudo ./install.sh --with-boot-service   # + apply a posture at every boot
+sudo ./uninstall.sh                     # restores posture, then removes
+```
+
+**Dev:**
 
 ```bash
 python -m venv .venv && . .venv/bin/activate
-pip install -e .
+pip install -e ".[dev]"
 umbra --help
+pytest -q
 ```

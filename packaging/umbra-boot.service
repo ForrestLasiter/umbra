@@ -1,0 +1,20 @@
+[Unit]
+Description=Umbra: apply the configured privacy/hardening posture at boot
+Documentation=https://github.com/ForrestLasiter/umbra
+# Raise the walls early, before the network is fully up.
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Read the profile name from /etc/umbra/boot-profile (default: home). --confirm
+# is required for fail-mode=closed profiles (travel/paranoid).
+ExecStart=/bin/sh -c '/usr/local/bin/umbra --confirm apply "$(cat /etc/umbra/boot-profile 2>/dev/null || echo home)"'
+# On shutdown/stop, return the machine to stock.
+ExecStop=/usr/local/bin/umbra normal
+
+[Install]
+WantedBy=multi-user.target
