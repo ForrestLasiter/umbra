@@ -193,6 +193,14 @@ def cmd_audit(args, runner: Runner) -> int:
     return 0
 
 
+def cmd_dashboard(args, runner: Runner) -> int:
+    from umbra.server import serve
+    # Read-only; degrades to N/A without root, so no privilege gate. Blocks until
+    # Ctrl-C.
+    serve(args.profile or "home", args.port, runner)
+    return 0
+
+
 def _print_apply(report, dry_run: bool) -> None:
     tag = "DRY-RUN " if dry_run else ""
     print(f"{tag}apply '{report.profile}' (tx {report.transaction_id or '-'}):")
@@ -240,6 +248,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("profile", nargs="?", help="profile to audit against (default: home)")
     sp.add_argument("--html", metavar="PATH", default=None,
                     help="also write an accessible HTML posture dashboard to PATH")
+
+    sp = sub.add_parser("dashboard", help="serve a live posture dashboard on localhost")
+    sp.add_argument("profile", nargs="?", help="profile to audit against (default: home)")
+    sp.add_argument("--port", type=int, default=8799, help="port to bind (default: 8799)")
     return p
 
 
@@ -251,6 +263,7 @@ _HANDLERS = {
     "normal": cmd_normal,
     "restore": cmd_restore,
     "audit": cmd_audit,
+    "dashboard": cmd_dashboard,
 }
 
 

@@ -40,6 +40,13 @@ def test_html_is_accessible_and_escaped():
     assert "<script>alert(1)</script>" not in doc
 
 
+def test_live_mode_adds_an_accessible_refresh_link():
+    doc = render_html(_sample(), live=True)
+    assert '<a href="/">Refresh</a>' in doc      # a real link, not a meta-refresh
+    assert "http-equiv=\"refresh\"" not in doc    # no forced timing (WCAG 2.2.1)
+    assert "live view" in doc
+
+
 def test_run_audit_returns_checks_without_error():
     # On any OS: probes must not throw; off-Linux they degrade to NA/INFO.
     report = run_audit(Runner(dry_run=False), load_profile("home"))

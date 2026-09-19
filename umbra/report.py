@@ -90,7 +90,7 @@ def _badge(status: Status) -> str:
             f'<span>{html.escape(word)}</span></span>')
 
 
-def render_html(report: AuditReport) -> str:
+def render_html(report: AuditReport, live: bool = False) -> str:
     counts = report.counts()
     summary_items = "".join(
         f'<li>{_badge(Status(s))}<span class="count">{counts[s]}</span></li>'
@@ -111,6 +111,13 @@ def render_html(report: AuditReport) -> str:
 
     profile = html.escape(report.profile)
     generated = html.escape(report.generated_at)
+    refresh = ('  ·  <a href="/">Refresh</a>' if live else "")
+    footer_note = (
+        "This is a live view; use Refresh to re-run the checks."
+        if live else
+        "This report reflects the machine state at generation time; re-run "
+        "<code>umbra audit</code> to refresh."
+    )
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -124,7 +131,7 @@ def render_html(report: AuditReport) -> str:
 <div class="wrap">
 <header class="page">
   <h1>Umbra posture dashboard</h1>
-  <p class="meta">Profile <strong>{profile}</strong> · generated {generated} (UTC)</p>
+  <p class="meta">Profile <strong>{profile}</strong> · generated {generated} (UTC){refresh}</p>
 </header>
 <main id="main">
   <h2 class="sr-only">Summary</h2>
@@ -140,8 +147,7 @@ def render_html(report: AuditReport) -> str:
   </table>
 </main>
 <footer>
-  <p>Umbra — a privacy/anonymity/hardening posture engine. This report reflects
-  the machine state at generation time; re-run <code>umbra audit</code> to refresh.</p>
+  <p>Umbra — a privacy/anonymity/hardening posture engine. {footer_note}</p>
 </footer>
 </div>
 </body>
