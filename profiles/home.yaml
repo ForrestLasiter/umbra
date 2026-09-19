@@ -1,0 +1,35 @@
+apiVersion: umbra/v1
+kind: Profile
+name: home
+description: >
+  Sane hardening for a trusted LAN. Blocks telemetry and local discovery, raises
+  a stealth firewall, and randomizes the MAC per network — while staying usable
+  (no killswitch, no radios off).
+meta:
+  fail_mode: open
+  require_confirm: false
+modules:
+  rf:
+    enabled: true
+    mac_randomization: per-network
+    suppress_probe_requests: true
+    bluetooth: non-discoverable
+    radios: [wifi, bluetooth]
+  netdark:
+    enabled: true
+    inbound_policy: drop
+    discovery:
+      mdns: true
+      llmnr: true
+      netbios: true
+      ssdp_upnp: true
+      wsd: true
+    ipv6_privacy: true
+    block_listening_services: false
+  tunnel:
+    enabled: false
+  telemetry:
+    enabled: true
+    blocklists: [os, common-trackers]
+    egress: blocklist
+    disable_os_telemetry: true

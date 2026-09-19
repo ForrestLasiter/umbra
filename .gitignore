@@ -1,0 +1,19 @@
+# Runtime state — never commit a machine's captured posture snapshots
+engine/state/transactions/
+engine/state/current
+engine/state/restore.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store

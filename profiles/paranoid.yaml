@@ -1,0 +1,41 @@
+apiVersion: umbra/v1
+kind: Profile
+name: paranoid
+description: >
+  Go dark. Maximum reduction of observable signature and attack surface. MAC
+  fully randomized (or radios killed), zero local broadcasts, no listening
+  services, traffic over Tor (or radios off entirely), egress allowlist only.
+  NOTE: "radios off" is the only true-invisibility setting; with wifi permitted
+  the device is still an RF emitter and detectable as such.
+extends: travel
+meta:
+  fail_mode: closed
+  require_confirm: true
+modules:
+  rf:
+    enabled: true
+    mac_randomization: full
+    suppress_probe_requests: true
+    bluetooth: off
+    radios: [wifi]          # set to [] for true go-dark (all radios blocked)
+  netdark:
+    enabled: true
+    inbound_policy: drop
+    discovery:
+      mdns: true
+      llmnr: true
+      netbios: true
+      ssdp_upnp: true
+      wsd: true
+    ipv6_privacy: true
+    block_listening_services: true
+  tunnel:
+    enabled: true
+    mode: tor
+    killswitch: true
+    dns: tunnel
+    leak_guard: [dns, ipv6, webrtc]
+  telemetry:
+    enabled: true
+    egress: allowlist
+    disable_os_telemetry: true
