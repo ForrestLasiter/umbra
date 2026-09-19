@@ -11,10 +11,12 @@ Wants=network-pre.target
 Type=oneshot
 RemainAfterExit=yes
 # Read the profile name from /etc/umbra/boot-profile (default: home). --confirm
-# is required for fail-mode=closed profiles (travel/paranoid).
-ExecStart=/bin/sh -c '/usr/local/bin/umbra --confirm apply "$(cat /etc/umbra/boot-profile 2>/dev/null || echo home)"'
+# is required for fail-mode=closed profiles (travel/paranoid). Bare `umbra` is
+# resolved via systemd's PATH, so this works for both the .deb (/usr/bin/umbra)
+# and install.sh (/usr/local/bin/umbra) layouts.
+ExecStart=/bin/sh -c 'umbra --confirm apply "$(cat /etc/umbra/boot-profile 2>/dev/null || echo home)"'
 # On shutdown/stop, return the machine to stock.
-ExecStop=/usr/local/bin/umbra normal
+ExecStop=/bin/sh -c 'umbra normal'
 
 [Install]
 WantedBy=multi-user.target

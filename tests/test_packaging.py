@@ -44,5 +44,18 @@ def test_boot_service_is_a_oneshot_that_applies_and_reverts():
     unit = _read("packaging/umbra-boot.service")
     assert "Type=oneshot" in unit
     assert "apply" in unit and "boot-profile" in unit
-    assert "ExecStop=/usr/local/bin/umbra normal" in unit
+    # method-agnostic: bare `umbra` via sh -c works for both .deb and install.sh
+    assert "umbra normal" in unit
+    assert "/usr/local/bin/umbra" not in unit  # no hardcoded path
     assert "WantedBy=multi-user.target" in unit
+
+
+def test_deb_builder_declares_deps_and_restores_on_remove():
+    sh = _read("packaging/build-deb.sh")
+    assert "Depends: python3, python3-yaml, python3-jsonschema, nftables" in sh
+    assert "PYTHONPATH=/usr/lib/umbra" in sh          # deb code layout
+    assert "/usr/bin/umbra" in sh                     # wrapper in secure_path
+    # prerm must restore posture before removal
+    prerm_at = sh.find("prerm")
+    normal_at = sh.find("/usr/bin/umbra normal")
+    assert prerm_at != -1 and normal_at != -1 and normal_at > prerm_at

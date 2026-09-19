@@ -3,6 +3,9 @@ engine/state/transactions/
 engine/state/current
 engine/state/restore.log
 
+# Build artifacts
+dist/
+
 # Python
 __pycache__/
 *.py[cod]
