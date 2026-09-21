@@ -31,6 +31,10 @@ rm -rf "$PREFIX"
 mkdir -p "$PREFIX"
 cp -r "$SRC/umbra" "$SRC/profiles" "$SRC/schema" "$PREFIX/"
 find "$PREFIX" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
+# World-readable so a non-root user can run `umbra` (needed for `umbra --pkexec`,
+# which starts as that user before elevating). A restrictive umask (027) would
+# otherwise leave /opt/umbra root-only.
+chmod -R a+rX "$PREFIX"
 
 echo "[3/4] wrapper -> $BIN"
 cat > "$BIN" <<EOF
@@ -55,6 +59,8 @@ fi
 # polkit policy (desktop auth for posture changes via `umbra --pkexec`)
 if [ -d /usr/share/polkit-1/actions ]; then
   cp "$SRC/packaging/com.forrestlasiter.umbra.policy" /usr/share/polkit-1/actions/
+  # 644 so polkitd (which may run as an unprivileged 'polkitd' user) can read it.
+  chmod 0644 /usr/share/polkit-1/actions/com.forrestlasiter.umbra.policy
 fi
 
 echo "[4/4] boot service"
