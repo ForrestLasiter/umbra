@@ -78,3 +78,19 @@ def print_banner(stream=None) -> None:
     except UnicodeEncodeError:
         # Belt and suspenders: force the ASCII form if the terminal still balks.
         stream.write(render_banner(unicode=False, stream=stream))
+
+
+def render_compact(color: bool | None = None, unicode: bool | None = None, stream=None) -> str:
+    """A single-line wordmark for the top of command output (e.g. `umbra status`)."""
+    stream = stream or sys.stdout
+    if color is None:
+        color = _supports_color(stream)
+    if unicode is None:
+        unicode = _supports_unicode(stream)
+    eye = "◐" if unicode else "o"       # ◐
+    name = f"umbra v{__version__}"
+    if color:
+        return f"{_BOLD}{_VIOLET}{eye} {name}{_RESET} {_DIM}· go dark on demand{_RESET}" if unicode \
+            else f"{_BOLD}{_VIOLET}{eye} {name}{_RESET} {_DIM}- go dark on demand{_RESET}"
+    sep = "·" if unicode else "-"
+    return f"{eye} {name} {sep} go dark on demand"

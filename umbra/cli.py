@@ -75,7 +75,12 @@ def cmd_status(args, runner: Runner) -> int:
         print(json.dumps(out, indent=2))
         return 0
 
-    print(f"posture vs profile '{profile.name}':\n")
+    from umbra.banner import render_compact
+    try:
+        print(render_compact())
+    except UnicodeEncodeError:
+        print(render_compact(unicode=False))
+    print(f"\nposture vs profile '{profile.name}':\n")
     any_control = False
     for module, states in report.items():
         if not states:
