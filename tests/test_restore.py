@@ -53,3 +53,16 @@ def test_table_delete_removes_only_our_table():
 def test_unknown_method_is_refused():
     with pytest.raises(ValueError):
         apply_restore(FakeRunner(), "rm_rf_everything", {})
+
+
+def test_path_restore_rewrites_file_and_can_remove(tmp_path):
+    f = tmp_path / "resolv.conf"
+    f.write_text("original\n")
+    f.write_text("MUTATED\n")                     # simulate umbra's change
+    apply_restore(FakeRunner(), "path_restore",
+                  {"path": str(f), "was_symlink": False, "existed": True, "content": "original\n"})
+    assert f.read_text() == "original\n"
+    # a path that did not exist before is removed on restore
+    apply_restore(FakeRunner(), "path_restore",
+                  {"path": str(f), "was_symlink": False, "existed": False, "content": None})
+    assert not f.exists()

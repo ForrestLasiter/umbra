@@ -1,34 +1,40 @@
 """tunnel — force traffic through a tunnel and cut everything that isn't.
 
-Umbra is a standalone, go-anywhere tool: the tunnel is ANY WireGuard endpoint you
-supply (a commercial VPN, a VPS you control - never assumed to be a home server),
-or Tor. It never phones home to a specific network.
+Umbra is a standalone, go-anywhere tool. The tunnel is either:
 
-Phase-2 controls (WireGuard mode):
-  * route       -- bring up the WireGuard interface via its systemd unit
-                   (wg-quick@<profile_ref>.service).
-  * killswitch  -- an nftables `umbra_egress` table with a default-DROP OUTPUT
-                   policy that permits only loopback, established traffic, the
-                   tunnel interface, the WireGuard endpoint, DHCP, and DNS.
+  * WireGuard — ANY endpoint YOU supply (a commercial VPN, a VPS you control;
+    never a home server, since phoning home ties the device to your identity), or
+  * Tor — a transparent proxy that connects to nothing of yours. This is the
+    anonymity path for operating a device anywhere with no fixed endpoint.
 
-This layers ON TOP of netdark's ruleset (it does NOT flush), so the two firewalls
-coexist: netdark guards inbound, tunnel guards outbound. Undo removes just our
-egress table (nftables_table_delete).
+Controls (WireGuard mode):
+  * route       -- bring up wg-quick@<profile_ref>.service.
+  * killswitch  -- an `umbra_egress` filter table (default-DROP OUTPUT) allowing
+                   only loopback, established, the tunnel interface, the endpoint,
+                   DHCP, and DNS.
 
-Order matters: the engine applies route before killswitch (bring the tunnel up,
-then seal egress) so a dynamic-hostname endpoint can still be resolved and
-handshaked.
+Controls (Tor mode):
+  * tor_config  -- add TransPort/DNSPort to torrc (a marked block).
+  * route       -- enable + (re)start tor.service so it loads that config.
+  * killswitch  -- two nftables tables that make Tor transparent AND leak-tight:
+        `umbra_tor_nat` (ip)   redirects all DNS -> Tor DNSPort and all TCP ->
+                               Tor TransPort (Tor's own uid and loopback excepted);
+        `umbra_tor` (inet)     default-DROP OUTPUT that permits only Tor's uid,
+                               loopback, established, and DHCP -- so ALL IPv6 and
+                               any non-Tor egress is dropped. No leaks by
+                               construction. (Local-network access is disabled in
+                               Tor mode; that is the point.)
+
+All tables layer ON TOP of netdark (no flush); undo removes only our tables.
 
 Honest limits (surfaced by measure()):
-  * Tor mode routing/killswitch is Phase 2.1; only WireGuard is wired now.
-  * DNS (port 53) is permitted so a dynamic-hostname endpoint can re-resolve on
-    reconnect. A static-IP endpoint can tighten this later.
   * WebRTC leak protection is a browser-level concern, not an OS firewall one; it
     is reported as advisory, not enforced here.
 """
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -36,6 +42,26 @@ from umbra.modules.base import Action, Compliance, Control, Module, VerifyResult
 
 _WG_DIR = Path("/etc/wireguard")
 _EGRESS_TABLE = "umbra_egress"
+
+# --- Tor transparent proxy ---------------------------------------------------
+# On Debian/Kali, tor.service is a do-nothing wrapper (RemainAfterExit oneshot);
+# the actual daemon is the instanced unit tor@default.service. Managing plain
+# tor.service reports "active" but runs no daemon and opens no TransPort.
+_TOR_UNIT = "tor@default.service"
+_TORRC = Path("/etc/tor/torrc")
+_TOR_BEGIN = "# >>> umbra tor transparent proxy >>>"
+_TOR_END = "# <<< umbra tor transparent proxy <<<"
+_TOR_TRANS_PORT = "9040"
+# NOT 5353: that's the mDNS port (avahi owns it), so Tor's DNSPort can't bind
+# there. 9053 is conflict-free.
+_TOR_DNS_PORT = "9053"
+_TOR_NAT_TABLE = "umbra_tor_nat"
+_TOR_FILTER_TABLE = "umbra_tor"
+_RESOLV = Path("/etc/resolv.conf")
+# Point the system resolver straight at loopback. DNS to 127.0.0.1:53 is then
+# redirected (a pure loopback hop) to Tor's DNSPort. This also drops the box's
+# IPv4/IPv6 LAN resolvers, so no DNS query ever leaves un-Tor'd.
+_RESOLV_CONTENT = "# Managed by umbra (tor mode). Restored by `umbra normal`.\nnameserver 127.0.0.1\noptions edns0 trust-ad\n"
 
 
 def _endpoint_from_conf(conf_text: str) -> tuple[str, str] | None:
@@ -47,7 +73,7 @@ def _endpoint_from_conf(conf_text: str) -> tuple[str, str] | None:
 
 
 def _build_killswitch(wg_iface: str, endpoint_ip: str, port: str) -> str:
-    """The egress ruleset. Pure function of its inputs so it is easy to test."""
+    """The WireGuard egress ruleset. Pure function so it is easy to test."""
     return (
         f"table inet {_EGRESS_TABLE} {{\n"
         f"\tchain output {{\n"
@@ -65,8 +91,75 @@ def _build_killswitch(wg_iface: str, endpoint_ip: str, port: str) -> str:
     )
 
 
+def _torrc_block() -> str:
+    return (
+        f"{_TOR_BEGIN}\n"
+        "VirtualAddrNetworkIPv4 10.192.0.0/10\n"
+        "AutomapHostsOnResolve 1\n"
+        f"TransPort 127.0.0.1:{_TOR_TRANS_PORT}\n"
+        f"DNSPort 127.0.0.1:{_TOR_DNS_PORT}\n"
+        f"{_TOR_END}\n"
+    )
+
+
+def _build_tor_nat(tor_uid: str) -> str:
+    """NAT redirect: DNS -> Tor DNSPort, all TCP -> Tor TransPort. Pure/testable.
+
+    Tor's own traffic (its uid) and loopback are returned unchanged so Tor can
+    actually reach the network and the redirected packets land locally.
+    """
+    return (
+        f"table ip {_TOR_NAT_TABLE} {{\n"
+        f"\tchain output {{\n"
+        f"\t\ttype nat hook output priority -100; policy accept;\n"
+        f"\t\tmeta skuid {tor_uid} return\n"
+        # DNS first (before the loopback return) so even a query aimed at
+        # 127.0.0.1:53 is redirected to Tor's DNSPort.
+        f"\t\tudp dport 53 redirect to :{_TOR_DNS_PORT}\n"
+        f"\t\ttcp dport 53 redirect to :{_TOR_DNS_PORT}\n"
+        f"\t\tip daddr 127.0.0.0/8 return\n"
+        # All remaining TCP -> Tor's TransPort. This also covers the
+        # AutomapHostsOnResolve virtual range (10.192.0.0/10) for .onion, so no
+        # separate rule is needed (and `redirect to :port` needs an l4proto match).
+        f"\t\tmeta l4proto tcp redirect to :{_TOR_TRANS_PORT}\n"
+        f"\t}}\n"
+        f"}}\n"
+    )
+
+
+def _build_tor_filter(tor_uid: str) -> str:
+    """Leak-tight killswitch: only Tor's uid, loopback, established, and DHCP get
+    out. Everything else -- all IPv6, all non-Tor egress -- is dropped."""
+    return (
+        f"table inet {_TOR_FILTER_TABLE} {{\n"
+        f"\tchain output {{\n"
+        f"\t\ttype filter hook output priority filter; policy drop;\n"
+        f"\t\tmeta skuid {tor_uid} accept\n"
+        f"\t\toif \"lo\" accept\n"
+        # Traffic the NAT table redirected to Tor's Trans/DNSPort now has a
+        # loopback destination but its oif is still the original interface, so
+        # match on the (rewritten) destination, not oif -- otherwise the
+        # redirected SYN is dropped and every connection times out.
+        f"\t\tip daddr 127.0.0.0/8 accept comment \"redirected-to-Tor\"\n"
+        f"\t\tct state established,related accept\n"
+        f"\t\tudp sport 68 udp dport 67 accept comment \"dhcp\"\n"
+        f"\t}}\n"
+        f"}}\n"
+    )
+
+
+def _strip_tor_block(text: str) -> str:
+    start, end = text.find(_TOR_BEGIN), text.find(_TOR_END)
+    if start == -1 or end == -1:
+        return text
+    return text[:start] + text[end + len(_TOR_END):].lstrip("\n")
+
+
 class TunnelModule(Module):
     name = "tunnel"
+
+    def _mode(self) -> str:
+        return self.config.get("mode", "off")
 
     def _ref(self) -> str:
         # A generic name; the user drops ANY WireGuard config at
@@ -74,17 +167,19 @@ class TunnelModule(Module):
         return self.config.get("profile_ref", "vpn")
 
     def _route_unit(self) -> str | None:
-        mode = self.config.get("mode", "off")
-        if mode == "wireguard":
+        if self._mode() == "wireguard":
             return f"wg-quick@{self._ref()}.service"
-        if mode == "tor":
-            return "tor.service"
+        if self._mode() == "tor":
+            return _TOR_UNIT
         return None
 
     def controls(self) -> list[Control]:
-        ctrls = [Control("tunnel.route", "Route traffic via the tunnel", "systemd_unit")]
+        ctrls: list[Control] = []
+        if self._mode() == "tor":
+            ctrls.append(Control("tunnel.tor_config", "Configure Tor transparent proxy", "file_replace"))
+        ctrls.append(Control("tunnel.route", "Route traffic via the tunnel", "systemd_unit"))
         if self.config.get("killswitch"):
-            ctrls.append(Control("tunnel.killswitch", "Drop all non-tunnel egress",
+            ctrls.append(Control("tunnel.killswitch", "Force all traffic through the tunnel",
                                  "nftables_table_delete"))
         return ctrls
 
@@ -97,6 +192,8 @@ class TunnelModule(Module):
         if not self.enabled:
             return states
 
+        if self._mode() == "tor":
+            states["tunnel.tor_config"] = self._measure_tor_config()
         states["tunnel.route"] = self._measure_route()
         if self.config.get("killswitch"):
             states["tunnel.killswitch"] = self._measure_killswitch()
@@ -107,12 +204,22 @@ class TunnelModule(Module):
             )
         return states
 
+    def _measure_tor_config(self) -> "ControlState":  # noqa: F821
+        from umbra.modules.base import ControlState
+
+        if not _TORRC.exists():
+            return ControlState("tunnel.tor_config", Compliance.UNKNOWN,
+                                detail="tor not installed (/etc/tor/torrc missing)")
+        present = _TOR_BEGIN in _TORRC.read_text()
+        return ControlState("tunnel.tor_config",
+                            Compliance.COMPLIANT if present else Compliance.DRIFT)
+
     def _measure_route(self) -> "ControlState":  # noqa: F821
         from umbra.modules.base import ControlState
 
-        if self.config.get("mode") == "tor":
-            return ControlState("tunnel.route", Compliance.UNSUPPORTED, detail="Tor mode is Phase 2.1")
         unit = self._route_unit()
+        if unit is None:
+            return ControlState("tunnel.route", Compliance.UNKNOWN, detail="tunnel mode is off")
         res = self.runner.run(["systemctl", "is-active", unit], read_only=True)
         if not res.available:
             return ControlState("tunnel.route", Compliance.UNKNOWN)
@@ -126,24 +233,21 @@ class TunnelModule(Module):
     def _measure_killswitch(self) -> "ControlState":  # noqa: F821
         from umbra.modules.base import ControlState
 
-        if self.config.get("mode") == "tor":
-            return ControlState("tunnel.killswitch", Compliance.UNSUPPORTED, detail="Tor mode is Phase 2.1")
         res = self.runner.run(["nft", "list", "ruleset"], read_only=True)
         if not res.available:
             return ControlState("tunnel.killswitch", Compliance.UNKNOWN)
-        present = _EGRESS_TABLE in res.stdout
-        return ControlState(
-            "tunnel.killswitch",
-            Compliance.COMPLIANT if present else Compliance.DRIFT,
-        )
+        marker = _TOR_FILTER_TABLE if self._mode() == "tor" else _EGRESS_TABLE
+        present = marker in res.stdout
+        return ControlState("tunnel.killswitch",
+                            Compliance.COMPLIANT if present else Compliance.DRIFT)
 
     # --- plan ----------------------------------------------------------------
 
     def plan(self) -> list[Action]:
         if not self.enabled:
             return []
-        # Deterministic order: route first, then killswitch (bring the tunnel up,
-        # then seal egress). measure() dict preserves insertion order.
+        # Deterministic order: (tor_config ->) route -> killswitch. measure()'s
+        # dict preserves insertion order, which matches this.
         return [
             Action(control, self.config, reason=state.detail or "drift")
             for control, state in self.measure().items()
@@ -153,10 +257,47 @@ class TunnelModule(Module):
     # --- apply ---------------------------------------------------------------
 
     def apply(self, action: Action, snap) -> None:
-        if action.control == "tunnel.route":
+        if action.control == "tunnel.tor_config":
+            self._apply_tor_config(snap)
+        elif action.control == "tunnel.route":
             self._apply_route(snap)
         elif action.control == "tunnel.killswitch":
-            self._apply_killswitch(snap)
+            if self._mode() == "tor":
+                self._apply_tor_killswitch(snap)
+            else:
+                self._apply_wg_killswitch(snap)
+
+    def _apply_tor_config(self, snap) -> None:
+        existed = _TORRC.exists()
+        content = _TORRC.read_text() if existed else ""
+        snap.record("tunnel.tor_config", "file_replace",
+                    {"path": str(_TORRC), "existed": existed, "content": content})
+        cleaned = _strip_tor_block(content)
+        if cleaned and not cleaned.endswith("\n"):
+            cleaned += "\n"
+        _TORRC.write_text(cleaned + _torrc_block())
+
+        # Point the system resolver at loopback so DNS goes through Tor reliably
+        # (a loopback->loopback redirect), and no LAN/IPv6 resolver leaks.
+        was_symlink = _RESOLV.is_symlink()
+        link_target = os.readlink(_RESOLV) if was_symlink else None
+        r_existed = was_symlink or _RESOLV.exists()
+        r_content = _RESOLV.read_text() if (r_existed and not was_symlink) else None
+        snap.record("tunnel.tor_resolv", "path_restore", {
+            "path": str(_RESOLV),
+            "was_symlink": was_symlink,
+            "link_target": link_target,
+            "existed": r_existed,
+            "content": r_content,
+        })
+        if _RESOLV.is_symlink() or _RESOLV.exists():
+            _RESOLV.unlink()
+        _RESOLV.write_text(_RESOLV_CONTENT)
+
+        # Force the daemon to load the new TransPort/DNSPort. The route control
+        # only *starts* Tor if it's stopped, so if Tor was already running it
+        # would otherwise never pick up this config change.
+        self.runner.run(["systemctl", "restart", _TOR_UNIT], read_only=False)
 
     def _apply_route(self, snap) -> None:
         unit = self._route_unit()
@@ -167,22 +308,36 @@ class TunnelModule(Module):
             "was_enabled": enabled.stdout.strip() == "enabled",
             "was_active": active.stdout.strip() == "active",
         })
-        self.runner.run(["systemctl", "enable", "--now", unit], read_only=False, check=True)
+        self.runner.run(["systemctl", "enable", unit], read_only=False)
+        if self._mode() == "tor":
+            # restart so tor loads the TransPort/DNSPort we just wrote to torrc
+            self.runner.run(["systemctl", "restart", unit], read_only=False, check=True)
+        else:
+            self.runner.run(["systemctl", "start", unit], read_only=False, check=True)
 
-    def _apply_killswitch(self, snap) -> None:
+    def _apply_wg_killswitch(self, snap) -> None:
         endpoint = self._resolve_endpoint()
         if endpoint is None:
             raise RuntimeError(f"could not determine WireGuard endpoint for {self._ref()!r}")
         endpoint_ip, port = endpoint
-        # Undo = remove just our table (we layer on top, we never flush).
         snap.record("tunnel.killswitch", "nftables_table_delete",
                     {"family": "inet", "table": _EGRESS_TABLE})
         ruleset = _build_killswitch(self._ref(), endpoint_ip, port)
         self.runner.run(["nft", "-f", "-"], read_only=False, check=True, input_text=ruleset)
 
+    def _apply_tor_killswitch(self, snap) -> None:
+        tor_uid = self._tor_uid()
+        if tor_uid is None:
+            raise RuntimeError("tor user (debian-tor) not found; is tor installed?")
+        # Two tables -> two snapshots under distinct ids so each undoes on its own.
+        snap.record("tunnel.killswitch_nat", "nftables_table_delete",
+                    {"family": "ip", "table": _TOR_NAT_TABLE})
+        snap.record("tunnel.killswitch_filter", "nftables_table_delete",
+                    {"family": "inet", "table": _TOR_FILTER_TABLE})
+        ruleset = _build_tor_nat(tor_uid) + _build_tor_filter(tor_uid)
+        self.runner.run(["nft", "-f", "-"], read_only=False, check=True, input_text=ruleset)
+
     def _resolve_endpoint(self) -> tuple[str, str] | None:
-        """Read the endpoint from the wg config, resolving a hostname to an IP so
-        the killswitch can allow it by address."""
         conf = _WG_DIR / f"{self._ref()}.conf"
         if not conf.exists():
             return None
@@ -192,10 +347,15 @@ class TunnelModule(Module):
         host, port = parsed
         if re.match(r"^\d+\.\d+\.\d+\.\d+$", host):
             return host, port
-        # Resolve a hostname endpoint to its current IPv4.
         res = self.runner.run(["getent", "ahostsv4", host], read_only=True)
         if res.available and res.ok and res.stdout.strip():
             return res.stdout.split()[0], port
+        return None
+
+    def _tor_uid(self) -> str | None:
+        res = self.runner.run(["id", "-u", "debian-tor"], read_only=True)
+        if res.available and res.ok and res.stdout.strip().isdigit():
+            return res.stdout.strip()
         return None
 
     # --- verify / restore ----------------------------------------------------

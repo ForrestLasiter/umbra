@@ -26,6 +26,7 @@ RESTORE_PRIMITIVES: frozenset[str] = frozenset({
     "sysctl_set",
     "file_replace",
     "hosts_replace",
+    "path_restore",
 })
 
 
@@ -92,6 +93,25 @@ def _file_replace(runner: Runner, prior: dict) -> None:
 _hosts_replace = _file_replace
 
 
+def _path_restore(runner: Runner, prior: dict) -> None:
+    """Restore a path that may have been a symlink, a file, or absent.
+
+    Used for /etc/resolv.conf, which is often a symlink (NetworkManager /
+    systemd-resolved). file_replace would turn a restored symlink into a plain
+    file; this preserves the original kind exactly.
+    """
+    path = Path(prior["path"])
+    if path.is_symlink() or path.exists():
+        try:
+            path.unlink()
+        except (OSError, IsADirectoryError):
+            pass
+    if prior.get("was_symlink"):
+        path.symlink_to(prior["link_target"])
+    elif prior.get("existed"):
+        path.write_text(prior.get("content") or "")
+
+
 def _not_yet(name: str):
     def _stub(runner: Runner, prior: dict) -> None:
         raise NotImplementedError(f"restore primitive '{name}' arrives with the rf/tunnel modules")
@@ -105,6 +125,7 @@ _DISPATCH = {
     "sysctl_set": _sysctl_set,
     "file_replace": _file_replace,
     "hosts_replace": _hosts_replace,
+    "path_restore": _path_restore,
     "rfkill_set": _rfkill_set,
     # nmcli MAC changes restore via file_replace of the NetworkManager drop-in,
     # so no dedicated nmcli_set primitive is needed yet.
