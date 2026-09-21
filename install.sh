@@ -43,11 +43,18 @@ chmod 0755 "$BIN"
 # sudo's secure_path excludes /usr/local/bin, so also expose it under /usr/sbin
 # (which is in secure_path) via a symlink, so `sudo umbra` always resolves.
 ln -sf "$BIN" /usr/sbin/umbra
+# /usr/bin/umbra so the polkit action's exec.path resolves for `umbra --pkexec`.
+ln -sf "$BIN" /usr/bin/umbra
 
 # man page (best-effort)
 if [ -f "$SRC/packaging/umbra.1" ] && [ -d /usr/share/man/man1 ]; then
   cp "$SRC/packaging/umbra.1" /usr/share/man/man1/umbra.1
   command -v mandb >/dev/null 2>&1 && mandb -q >/dev/null 2>&1 || true
+fi
+
+# polkit policy (desktop auth for posture changes via `umbra --pkexec`)
+if [ -d /usr/share/polkit-1/actions ]; then
+  cp "$SRC/packaging/com.forrestlasiter.umbra.policy" /usr/share/polkit-1/actions/
 fi
 
 echo "[4/4] boot service"

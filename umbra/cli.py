@@ -18,6 +18,7 @@ import argparse
 import json
 import logging
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -53,7 +54,28 @@ def _require_privilege(dry_run: bool) -> None:
     if not _is_linux():
         raise SystemExit("umbra: mutations only run on Linux (use --dry-run to preview here)")
     if not _is_root():
-        raise SystemExit("umbra: this command changes system state; run as root (or via sudo)")
+        raise SystemExit(
+            "umbra: this command changes system state. Re-run as root:\n"
+            "         sudo umbra ...            (terminal)\n"
+            "         umbra --pkexec ...        (desktop auth dialog, no root shell)"
+        )
+
+
+def _umbra_bin() -> str:
+    """The installed umbra launcher to hand pkexec. Prefer /usr/bin/umbra so it
+    matches the polkit action's exec.path; fall back sensibly."""
+    for candidate in ("/usr/bin/umbra", "/usr/local/bin/umbra"):
+        if os.path.exists(candidate):
+            return candidate
+    return shutil.which("umbra") or os.path.abspath(sys.argv[0])
+
+
+def _pkexec_command(raw_args: list[str], umbra_bin: str | None = None) -> list[str]:
+    """Build the `pkexec <umbra> <args>` command, with --pkexec stripped out.
+
+    Pure/testable: the actual re-exec lives in main()."""
+    binary = umbra_bin or _umbra_bin()
+    return ["pkexec", binary, *[a for a in raw_args if a != "--pkexec"]]
 
 
 # --- command handlers --------------------------------------------------------
@@ -231,6 +253,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--verbose", "-v", action="store_true", help="debug logging")
     p.add_argument("--confirm", action="store_true", help="acknowledge a fail-mode=closed apply")
     p.add_argument("--profiles-dir", default=None, help="override the profiles directory")
+    p.add_argument("--pkexec", action="store_true",
+                   help="re-run this command as root via pkexec (desktop auth dialog) instead of sudo")
 
     sub = p.add_subparsers(dest="command")
     sub.add_parser("list", help="list available profiles")
@@ -285,6 +309,20 @@ def main(argv: list[str] | None = None) -> int:
         print("   commands: status · plan · apply · normal · audit · dashboard · list")
         print("   start with:  umbra status home     (see: umbra --help)\n")
         return 0
+
+    # --pkexec: re-run ourselves as root through polkit (a desktop auth dialog),
+    # so a non-root user can change posture without a root shell. Only elevate
+    # when we actually need to (not already root, on Linux).
+    if getattr(args, "pkexec", False) and _is_linux() and not _is_root():
+        raw = list(sys.argv[1:] if argv is None else argv)
+        cmd = _pkexec_command(raw)
+        try:
+            os.execvp(cmd[0], cmd)          # replaces this process
+        except FileNotFoundError:
+            print("umbra: pkexec not found; install polkit (policykit-1) or use: sudo umbra ...",
+                  file=sys.stderr)
+            return 2
+
     runner = Runner(dry_run=args.dry_run)
     try:
         return _HANDLERS[args.command](args, runner)

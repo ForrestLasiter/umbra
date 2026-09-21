@@ -44,6 +44,10 @@ Machine-readable output where supported.
 .TP
 .B --confirm
 Acknowledge a fail-mode=closed apply.
+.TP
+.B --pkexec
+Re-run the command as root via pkexec (a desktop authentication dialog) instead
+of sudo, using the polkit action com.forrestlasiter.umbra.run.
 .SH FILES
 .TP
 .I /opt/umbra

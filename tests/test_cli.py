@@ -39,6 +39,14 @@ def test_normal_with_no_active_posture_is_a_noop(monkeypatch):
     assert rc == 0
 
 
+def test_pkexec_command_strips_flag_and_prepends_pkexec():
+    cmd = cli._pkexec_command(["--pkexec", "apply", "travel", "--confirm"],
+                              umbra_bin="/usr/bin/umbra")
+    assert cmd == ["pkexec", "/usr/bin/umbra", "apply", "travel", "--confirm"]
+    # --pkexec never leaks into the elevated invocation (would loop otherwise)
+    assert "--pkexec" not in cmd
+
+
 def test_audit_html_writes_a_file(tmp_path):
     out = tmp_path / "posture.html"
     args = argparse.Namespace(profile="home", profiles_dir=None,

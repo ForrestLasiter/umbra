@@ -6,13 +6,32 @@ important invariants so a careless edit can't break the install contract.
 
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+_POLICY = "packaging/com.forrestlasiter.umbra.policy"
+
 
 def _read(rel: str) -> str:
     return (ROOT / rel).read_text()
+
+
+def test_polkit_policy_is_valid_xml_with_exec_action():
+    root = ET.fromstring(_read(_POLICY))
+    action = root.find("action")
+    assert action is not None and action.get("id") == "com.forrestlasiter.umbra.run"
+    annotations = {a.get("key"): a.text for a in action.findall("annotate")}
+    assert annotations["org.freedesktop.policykit.exec.path"] == "/usr/bin/umbra"
+
+
+def test_installers_and_deb_ship_the_polkit_policy():
+    assert "/usr/share/polkit-1/actions" in _read("install.sh")
+    assert "com.forrestlasiter.umbra.policy" in _read("install.sh")
+    assert "/usr/bin/umbra" in _read("install.sh")                 # exec.path target
+    assert "com.forrestlasiter.umbra.policy" in _read("uninstall.sh")
+    assert "com.forrestlasiter.umbra.policy" in _read("packaging/build-deb.sh")
 
 
 def test_installer_creates_wrapper_and_uses_pythonpath():

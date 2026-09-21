@@ -20,6 +20,7 @@ mkdir -p "$STAGE/DEBIAN" \
          "$STAGE/usr/lib/umbra" \
          "$STAGE/usr/bin" \
          "$STAGE/usr/share/man/man1" \
+         "$STAGE/usr/share/polkit-1/actions" \
          "$STAGE/lib/systemd/system" \
          "$STAGE/etc/umbra"
 
@@ -35,6 +36,7 @@ EOF
 chmod 0755 "$STAGE/usr/bin/umbra"
 
 cp "$SRC/packaging/umbra.1" "$STAGE/usr/share/man/man1/umbra.1"
+cp "$SRC/packaging/com.forrestlasiter.umbra.policy" "$STAGE/usr/share/polkit-1/actions/"
 cp "$SRC/packaging/umbra-boot.service" "$STAGE/lib/systemd/system/umbra-boot.service"
 echo home > "$STAGE/etc/umbra/boot-profile"
 
