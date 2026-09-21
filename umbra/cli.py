@@ -227,7 +227,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--confirm", action="store_true", help="acknowledge a fail-mode=closed apply")
     p.add_argument("--profiles-dir", default=None, help="override the profiles directory")
 
-    sub = p.add_subparsers(dest="command", required=True)
+    sub = p.add_subparsers(dest="command")
     sub.add_parser("list", help="list available profiles")
 
     sp = sub.add_parser("status", help="measured posture vs a profile")
@@ -273,6 +273,13 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(levelname)s %(name)s: %(message)s",
     )
+    if args.command is None:
+        # Bare `umbra`: show the banner and a nudge toward the common commands.
+        from umbra.banner import print_banner
+        print_banner()
+        print("   commands: status · plan · apply · normal · audit · dashboard · list")
+        print("   start with:  umbra status home     (see: umbra --help)\n")
+        return 0
     runner = Runner(dry_run=args.dry_run)
     try:
         return _HANDLERS[args.command](args, runner)
