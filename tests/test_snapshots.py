@@ -109,3 +109,10 @@ def test_malformed_transaction_id_is_rejected(state_dir):
     import pytest
     with pytest.raises(ValueError):
         snapshots.restore_transaction(Runner(dry_run=False), "../../etc/passwd")
+
+
+def test_apply_lock_is_a_working_context_manager(state_dir):
+    # No-op on non-Unix, real flock on Unix; either way it must enter/exit cleanly.
+    from umbra import lock
+    with lock.apply_lock():
+        pass

@@ -8,21 +8,35 @@
 [ "$2" = "up" ] || exit 0
 
 AP=/var/lib/umbra/active-profile
-[ -f "$AP" ] || exit 0            # no active posture -> nothing to do
-
-# Debounce: applying a profile can itself nudge NetworkManager (MAC/hostname
-# reload), which would re-fire this script. Skip if we ran in the last 15s.
-LOCK=/run/umbra-dispatch.ts
-now=$(date +%s 2>/dev/null || echo 0)
-if [ -f "$LOCK" ]; then
-  last=$(cat "$LOCK" 2>/dev/null || echo 0)
-  [ $((now - last)) -lt 15 ] && exit 0
-fi
-echo "$now" > "$LOCK" 2>/dev/null || true
-
+[ -f "$AP" ] || exit 0                    # no active posture -> nothing to do
 PROFILE=$(cat "$AP" 2>/dev/null)
 [ -n "$PROFILE" ] || exit 0
 
+# Serialize with any other reapply (flock, held for the life of this script), so
+# two transactions never run at once. Skip -- don't queue -- if one is running.
+LOCK=/run/umbra-dispatch.lock
+if command -v flock >/dev/null 2>&1; then
+  exec 9>"$LOCK" || exit 0
+  flock -n 9 || exit 0
+fi
+
+# Debounce: applying a profile can itself nudge NetworkManager (MAC/hostname
+# reload), which re-fires this script. Skip if we ran in the last 15s.
+TS=/run/umbra-dispatch.ts
+now=$(date +%s 2>/dev/null || echo 0)
+if [ -f "$TS" ]; then
+  last=$(cat "$TS" 2>/dev/null || echo 0)
+  [ $((now - last)) -lt 15 ] && exit 0
+fi
+echo "$now" > "$TS" 2>/dev/null || true
+
 # apply is idempotent (acts only on drift), so this is cheap when nothing moved.
-/usr/bin/umbra --confirm apply "$PROFILE" >/dev/null 2>&1 || true
+if /usr/bin/umbra --confirm apply "$PROFILE" >/dev/null 2>&1; then
+  logger -t umbra-dispatch "reapplied posture '$PROFILE' on $1 up" 2>/dev/null || true
+else
+  rc=$?
+  logger -t umbra-dispatch "FAILED to reapply '$PROFILE' on $1 up (rc=$rc)" 2>/dev/null \
+    || echo "$(date) FAILED reapply '$PROFILE' on $1 (rc=$rc)" >> /var/log/umbra-dispatch.log 2>/dev/null \
+    || true
+fi
 exit 0

@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from umbra import capabilities, snapshots
+from umbra import capabilities, lock, snapshots
 from umbra.modules import build_modules
 from umbra.modules.base import APPLY_ORDER, Action, Compliance, ControlState
 from umbra.profiles import Profile
@@ -67,6 +67,11 @@ class Engine:
     # --- the mutating path ---------------------------------------------------
 
     def apply(self, profile: Profile) -> ApplyReport:
+        # Serialize with any other apply/restore (terminal, tray, NM dispatcher).
+        with lock.apply_lock():
+            return self._apply_locked(profile)
+
+    def _apply_locked(self, profile: Profile) -> ApplyReport:
         report = ApplyReport(profile=profile.name, transaction_id=None)
 
         # 1) Crash recovery: never build on top of a half-applied prior run.
@@ -131,7 +136,8 @@ class Engine:
 
     def restore(self, tx_id: str | None = None) -> list[str]:
         """Restore a transaction (default: the current one). Returns failures."""
-        return snapshots.restore_transaction(self.runner, tx_id)
+        with lock.apply_lock():
+            return snapshots.restore_transaction(self.runner, tx_id)
 
     # --- internals -----------------------------------------------------------
 

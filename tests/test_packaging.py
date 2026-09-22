@@ -50,12 +50,15 @@ def test_installers_and_deb_ship_the_polkit_policy():
     assert "com.forrestlasiter.umbra.policy" in _read("packaging/build-deb.sh")
 
 
-def test_nm_dispatcher_reapplies_active_profile_with_debounce():
+def test_nm_dispatcher_reapplies_active_profile_safely():
     sh = _read("packaging/umbra-nm-dispatcher")
     assert 'active-profile' in sh                    # reads the marker
     assert 'umbra --confirm apply' in sh             # re-applies it
     assert 'up' in sh                                 # only on link-up
-    assert 'umbra-dispatch.ts' in sh                 # debounce lock (no loop)
+    assert 'umbra-dispatch.ts' in sh                 # debounce (no loop)
+    assert 'flock -n 9' in sh                         # mutual exclusion (no concurrency)
+    assert 'logger -t umbra-dispatch' in sh          # logs success/failure
+    assert 'FAILED' in sh                             # logs failed reapply
     # installers wire it in and remove it
     assert "dispatcher.d/50-umbra" in _read("install.sh")
     assert "dispatcher.d/50-umbra" in _read("uninstall.sh")
