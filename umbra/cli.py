@@ -70,12 +70,40 @@ def _umbra_bin() -> str:
     return shutil.which("umbra") or os.path.abspath(sys.argv[0])
 
 
+# Commands a pkexec-elevated run may perform. Excludes anything that could be
+# turned into arbitrary privileged action (tray/dashboard/vpn import).
+_PKEXEC_SAFE_COMMANDS = frozenset({
+    "apply", "normal", "restore", "panic", "status", "plan", "audit", "doctor", "list",
+})
+
+
+def _strip_reexec_args(raw_args: list[str]) -> list[str]:
+    """Drop flags that must never cross the pkexec boundary: --pkexec (would loop)
+    and --profiles-dir (would let a caller point a privileged run at their own
+    profiles)."""
+    out: list[str] = []
+    skip_next = False
+    for a in raw_args:
+        if skip_next:
+            skip_next = False
+            continue
+        if a == "--pkexec":
+            continue
+        if a == "--profiles-dir":
+            skip_next = True                 # also drop its value
+            continue
+        if a.startswith("--profiles-dir="):
+            continue
+        out.append(a)
+    return out
+
+
 def _pkexec_command(raw_args: list[str], umbra_bin: str | None = None) -> list[str]:
-    """Build the `pkexec <umbra> <args>` command, with --pkexec stripped out.
+    """Build the `pkexec <umbra> <args>` command, with unsafe flags stripped.
 
     Pure/testable: the actual re-exec lives in main()."""
     binary = umbra_bin or _umbra_bin()
-    return ["pkexec", binary, *[a for a in raw_args if a != "--pkexec"]]
+    return ["pkexec", binary, *_strip_reexec_args(raw_args)]
 
 
 # --- command handlers --------------------------------------------------------
@@ -259,17 +287,21 @@ def cmd_panic(args, runner: Runner) -> int:
 
 def cmd_vpn(args, runner: Runner) -> int:
     """Import a WireGuard config so tunnel(wireguard) profiles can use it."""
+    from umbra import fsutil
+    from umbra.validate import ValidationError, safe_vpn_name
+    try:
+        name = safe_vpn_name(args.name)
+    except ValidationError as exc:
+        print(f"umbra: {exc}", file=sys.stderr)
+        return 2
     src = Path(args.config)
-    if not src.exists():
+    if not src.is_file():
         print(f"umbra: no such file: {src}", file=sys.stderr)
         return 2
     _require_privilege(dry_run=False)
-    dest_dir = Path("/etc/wireguard")
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / f"{args.name}.conf"
-    dest.write_text(src.read_text())
-    os.chmod(dest, 0o600)
-    print(f"imported {src} -> {dest} (referenced as profile_ref: {args.name})")
+    dest = Path("/etc/wireguard") / f"{name}.conf"
+    fsutil.atomic_write_text(dest, src.read_text(), mode=0o600)
+    print(f"imported {src} -> {dest} (referenced as profile_ref: {name})")
     return 0
 
 
@@ -379,6 +411,18 @@ def main(argv: list[str] | None = None) -> int:
             os.execvp(cmd[0], cmd)          # replaces this process
         except FileNotFoundError:
             print("umbra: pkexec not found; install polkit (policykit-1) or use: sudo umbra ...",
+                  file=sys.stderr)
+            return 2
+
+    # When WE are the pkexec-elevated process, constrain what's allowed: only the
+    # safe built-in operations, and never an attacker-chosen profiles directory.
+    if os.environ.get("PKEXEC_UID") is not None:
+        if args.command not in _PKEXEC_SAFE_COMMANDS:
+            print(f"umbra: '{args.command}' is not permitted via pkexec; run it directly",
+                  file=sys.stderr)
+            return 2
+        if getattr(args, "profiles_dir", None):
+            print("umbra: --profiles-dir is not permitted via pkexec (uses built-in profiles)",
                   file=sys.stderr)
             return 2
 

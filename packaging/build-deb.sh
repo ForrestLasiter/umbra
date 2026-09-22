@@ -33,7 +33,7 @@ find "$STAGE/usr/lib/umbra" -name '__pycache__' -type d -prune -exec rm -rf {} +
 # wrapper (PYTHONPATH points at the packaged code root)
 cat > "$STAGE/usr/bin/umbra" <<'EOF'
 #!/bin/sh
-exec /usr/bin/env PYTHONPATH=/usr/lib/umbra python3 -m umbra.cli "$@"
+exec /usr/bin/env PYTHONPATH=/usr/lib/umbra /usr/bin/python3 -m umbra.cli "$@"
 EOF
 chmod 0755 "$STAGE/usr/bin/umbra"
 

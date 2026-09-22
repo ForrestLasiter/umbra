@@ -47,6 +47,17 @@ def test_pkexec_command_strips_flag_and_prepends_pkexec():
     assert "--pkexec" not in cmd
 
 
+def test_pkexec_command_strips_profiles_dir():
+    # a caller must not be able to point a privileged run at their own profiles
+    cmd = cli._pkexec_command(["--pkexec", "--profiles-dir", "/tmp/evil", "apply", "home"],
+                              umbra_bin="/usr/bin/umbra")
+    assert cmd == ["pkexec", "/usr/bin/umbra", "apply", "home"]
+    assert "--profiles-dir" not in cmd and "/tmp/evil" not in cmd
+    # also the = form
+    cmd2 = cli._pkexec_command(["--profiles-dir=/tmp/evil", "normal"], umbra_bin="/usr/bin/umbra")
+    assert cmd2 == ["pkexec", "/usr/bin/umbra", "normal"]
+
+
 def test_audit_html_writes_a_file(tmp_path):
     out = tmp_path / "posture.html"
     args = argparse.Namespace(profile="home", profiles_dir=None,

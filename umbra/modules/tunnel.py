@@ -167,8 +167,9 @@ class TunnelModule(Module):
         return self.config.get("profile_ref", "vpn")
 
     def _route_unit(self) -> str | None:
+        from umbra.validate import safe_name
         if self._mode() == "wireguard":
-            return f"wg-quick@{self._ref()}.service"
+            return f"wg-quick@{safe_name(self._ref(), 'tunnel profile_ref')}.service"
         if self._mode() == "tor":
             return _TOR_UNIT
         return None
@@ -216,8 +217,12 @@ class TunnelModule(Module):
 
     def _measure_route(self) -> "ControlState":  # noqa: F821
         from umbra.modules.base import ControlState
+        from umbra.validate import ValidationError
 
-        unit = self._route_unit()
+        try:
+            unit = self._route_unit()
+        except ValidationError as exc:
+            return ControlState("tunnel.route", Compliance.UNKNOWN, detail=str(exc))
         if unit is None:
             return ControlState("tunnel.route", Compliance.UNKNOWN, detail="tunnel mode is off")
         res = self.runner.run(["systemctl", "is-active", unit], read_only=True)
@@ -329,7 +334,8 @@ class TunnelModule(Module):
         self.runner.run(["nft", "-f", "-"], read_only=False, check=True, input_text=ruleset)
 
     def _resolve_endpoint(self) -> tuple[str, str] | None:
-        conf = _WG_DIR / f"{self._ref()}.conf"
+        from umbra.validate import safe_name
+        conf = _WG_DIR / f"{safe_name(self._ref(), 'tunnel profile_ref')}.conf"
         if not conf.exists():
             return None
         parsed = _endpoint_from_conf(conf.read_text())

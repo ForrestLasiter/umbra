@@ -14,11 +14,20 @@ all over the codebase?
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
 
 log = logging.getLogger("umbra.runner")
+
+# A fixed, trusted PATH used for every subprocess, so a hostile PATH in the
+# environment can't make umbra run an attacker's `nft`/`systemctl`/`sysctl`.
+_SAFE_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Default per-command timeout (seconds). No umbra command should legitimately run
+# longer; a hang otherwise wedges the whole apply.
+_DEFAULT_TIMEOUT = 120
 
 
 @dataclass
@@ -50,6 +59,15 @@ class Runner:
         """Is this tool installed? Modules use this to decide UNSUPPORTED."""
         return shutil.which(binary) is not None
 
+    def _clean_env(self) -> dict[str, str]:
+        """The environment for a subprocess: inherit, but force a trusted PATH and
+        a stable locale, and drop IFS."""
+        env = dict(os.environ)
+        env["PATH"] = _SAFE_PATH
+        env["LC_ALL"] = "C"
+        env.pop("IFS", None)
+        return env
+
     def run(
         self,
         argv: list[str],
@@ -57,6 +75,7 @@ class Runner:
         read_only: bool,
         check: bool = False,
         input_text: str | None = None,
+        timeout: int = _DEFAULT_TIMEOUT,
     ) -> RunResult:
         """Execute (or, for a mutation in dry-run, pretend to execute) a command.
 
@@ -65,8 +84,8 @@ class Runner:
                            the real current state.
         read_only=False -> a mutation; skipped and only logged when dry_run.
 
-        check=True raises RuntimeError on a non-zero exit (use for steps where a
-        failure must abort the transaction).
+        check=True raises RuntimeError on a non-zero exit or a timeout (use for
+        steps where a failure must abort the transaction).
         """
         binary = argv[0]
         if not self.which(binary):
@@ -81,12 +100,22 @@ class Runner:
             return RunResult(argv, 0, "", "", False, True)
 
         log.debug("exec: %s", " ".join(argv))
-        proc = subprocess.run(
-            argv,
-            input=input_text,
-            capture_output=True,
-            text=True,
-        )
+        try:
+            proc = subprocess.run(
+                argv,
+                input=input_text,
+                capture_output=True,
+                text=True,
+                env=self._clean_env(),
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as exc:
+            log.error("command timed out after %ss: %s", timeout, " ".join(argv))
+            if check:
+                raise RuntimeError(f"command timed out ({timeout}s): {' '.join(argv)}") from exc
+            return RunResult(argv, 124, exc.stdout or "",
+                             (exc.stderr or "") + "\n<timed out>", executed=True, available=True)
+
         result = RunResult(
             argv,
             proc.returncode,

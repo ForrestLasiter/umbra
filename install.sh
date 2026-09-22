@@ -39,8 +39,8 @@ chmod -R a+rX "$PREFIX"
 echo "[3/4] wrapper -> $BIN"
 cat > "$BIN" <<EOF
 #!/bin/sh
-# umbra launcher (installed by install.sh)
-exec /usr/bin/env PYTHONPATH="$PREFIX" python3 -m umbra.cli "\$@"
+# umbra launcher (installed by install.sh). Absolute interpreter path.
+exec /usr/bin/env PYTHONPATH="$PREFIX" /usr/bin/python3 -m umbra.cli "\$@"
 EOF
 chmod 0755 "$BIN"
 # umbra is a root tool, almost always run as `sudo umbra ...`. On some images

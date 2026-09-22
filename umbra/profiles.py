@@ -59,6 +59,11 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 def _read_yaml(name: str, profiles_dir: Path) -> dict:
+    from umbra.validate import ValidationError, safe_name
+    try:
+        safe_name(name, "profile name")
+    except ValidationError as exc:
+        raise ProfileError(str(exc)) from exc
     path = profiles_dir / f"{name}.yaml"
     if not path.exists():
         raise ProfileError(f"no such profile: {name} (looked in {profiles_dir})")
