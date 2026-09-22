@@ -11,9 +11,11 @@
 #   /etc/umbra/boot-profile                  conffile (preserves user edits)
 set -euo pipefail
 
-VERSION=0.1.0
 ARCH=all
 SRC="$(cd "$(dirname "$0")/.." && pwd)"          # repo root
+# Single source of truth for the version: umbra/__init__.py.
+VERSION="$(sed -n 's/^__version__ = "\([^"]*\)"/\1/p' "$SRC/umbra/__init__.py")"
+[ -n "$VERSION" ] || { echo "could not read version from umbra/__init__.py"; exit 1; }
 STAGE="$(mktemp -d)/umbra_${VERSION}_${ARCH}"
 
 mkdir -p "$STAGE/DEBIAN" \
@@ -26,8 +28,8 @@ mkdir -p "$STAGE/DEBIAN" \
          "$STAGE/lib/systemd/system" \
          "$STAGE/etc/umbra"
 
-# code + data
-cp -r "$SRC/umbra" "$SRC/profiles" "$SRC/schema" "$STAGE/usr/lib/umbra/"
+# code + data (profiles/ and schema/ ship inside the umbra package)
+cp -r "$SRC/umbra" "$STAGE/usr/lib/umbra/"
 find "$STAGE/usr/lib/umbra" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
 
 # wrapper (PYTHONPATH points at the packaged code root)

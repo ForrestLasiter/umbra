@@ -29,7 +29,8 @@ fi
 echo "[2/4] install code -> $PREFIX"
 rm -rf "$PREFIX"
 mkdir -p "$PREFIX"
-cp -r "$SRC/umbra" "$SRC/profiles" "$SRC/schema" "$PREFIX/"
+# profiles/ and schema/ ship inside the umbra package now, so this is all we copy.
+cp -r "$SRC/umbra" "$PREFIX/"
 find "$PREFIX" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
 # World-readable so a non-root user can run `umbra` (needed for `umbra --pkexec`,
 # which starts as that user before elevating). A restrictive umask (027) would

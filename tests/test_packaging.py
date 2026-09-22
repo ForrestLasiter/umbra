@@ -18,6 +18,22 @@ def _read(rel: str) -> str:
     return (ROOT / rel).read_text()
 
 
+def test_profiles_and_schema_ship_inside_the_package():
+    # importlib.resources must find the data (so a wheel/.deb carries it).
+    from umbra import paths
+    assert paths.PROFILE_SCHEMA.exists()
+    names = {p.name for p in paths.PROFILES_DIR.glob("*.yaml")}
+    assert {"home.yaml", "travel.yaml", "paranoid.yaml", "normal.yaml"} <= names
+
+
+def test_version_is_single_sourced():
+    # pyproject reads the version from umbra.__version__ (dynamic), and build-deb
+    # reads it from the same file -- no hardcoded duplicate.
+    assert 'version = { attr = "umbra.__version__" }' in _read("pyproject.toml")
+    assert 'version = "' not in _read("pyproject.toml")            # not hardcoded
+    assert "umbra/__init__.py" in _read("packaging/build-deb.sh")
+
+
 def test_polkit_policy_is_valid_xml_with_exec_action():
     root = ET.fromstring(_read(_POLICY))
     action = root.find("action")

@@ -24,3 +24,50 @@ jobs:
           bash -n install.sh
           bash -n uninstall.sh
           bash -n packaging/build-deb.sh
+          bash -n packaging/umbra-nm-dispatcher
+
+  wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel -o dist
+      - name: Install the wheel in a clean venv and run it
+        run: |
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install dist/umbra-*.whl
+          # profiles/schema must ship with the wheel, so these work with no repo:
+          cd /tmp
+          /tmp/venv/bin/umbra --version
+          /tmp/venv/bin/umbra list | grep -qx home
+          /tmp/venv/bin/umbra plan home >/dev/null
+
+  deb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the .deb
+        run: |
+          bash packaging/build-deb.sh
+          test -f dist/umbra_*.deb
+          dpkg-deb --info dist/umbra_*.deb
+          # sanity: the package declares its dependencies and ships the policy
+          dpkg-deb --info dist/umbra_*.deb | grep -q "Depends:"
+          dpkg-deb --contents dist/umbra_*.deb | grep -q "usr/share/polkit-1/actions/com.forrestlasiter.umbra.policy"
+          dpkg-deb --contents dist/umbra_*.deb | grep -q "etc/NetworkManager/dispatcher.d/50-umbra"
+
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the polkit policy XML
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libxml2-utils
+          xmllint --noout packaging/com.forrestlasiter.umbra.policy
+          grep -q "com.forrestlasiter.umbra.run" packaging/com.forrestlasiter.umbra.policy

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "umbra"
-version = "0.1.0"
+dynamic = ["version"]
 description = "One-toggle privacy/anonymity/hardening posture engine for Linux"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "build>=1.0"]
 
 [project.scripts]
 # This makes `umbra` a command on your PATH after `pip install -e .`.
@@ -26,6 +26,11 @@ umbra = "umbra.cli:main"
 [tool.setuptools]
 packages = ["umbra", "umbra.modules"]
 
+[tool.setuptools.dynamic]
+# Single source of truth for the version: umbra/__init__.py __version__.
+version = { attr = "umbra.__version__" }
+
 [tool.setuptools.package-data]
-# Ship the JSON Schema and the stock profiles inside the installed package.
-umbra = ["../schema/*.json", "../profiles/*.yaml"]
+# Ship the JSON Schema and stock profiles INSIDE the package (umbra/schema,
+# umbra/profiles), so a wheel and the .deb both carry them.
+umbra = ["schema/*.json", "profiles/*.yaml"]
