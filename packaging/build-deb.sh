@@ -21,6 +21,7 @@ mkdir -p "$STAGE/DEBIAN" \
          "$STAGE/usr/bin" \
          "$STAGE/usr/share/man/man1" \
          "$STAGE/usr/share/polkit-1/actions" \
+         "$STAGE/etc/NetworkManager/dispatcher.d" \
          "$STAGE/lib/systemd/system" \
          "$STAGE/etc/umbra"
 
@@ -37,6 +38,7 @@ chmod 0755 "$STAGE/usr/bin/umbra"
 
 cp "$SRC/packaging/umbra.1" "$STAGE/usr/share/man/man1/umbra.1"
 cp "$SRC/packaging/com.forrestlasiter.umbra.policy" "$STAGE/usr/share/polkit-1/actions/"
+cp "$SRC/packaging/umbra-nm-dispatcher" "$STAGE/etc/NetworkManager/dispatcher.d/50-umbra"
 cp "$SRC/packaging/umbra-boot.service" "$STAGE/lib/systemd/system/umbra-boot.service"
 echo home > "$STAGE/etc/umbra/boot-profile"
 
@@ -84,7 +86,8 @@ chmod 0755 "$STAGE/DEBIAN/postinst"
 # restrictive root umask (e.g. 027 on hardened Kali) yields 0750. Set them.
 find "$STAGE" -type d -exec chmod 0755 {} +
 find "$STAGE" -type f -exec chmod 0644 {} +
-chmod 0755 "$STAGE/usr/bin/umbra" "$STAGE/DEBIAN/prerm" "$STAGE/DEBIAN/postinst"
+chmod 0755 "$STAGE/usr/bin/umbra" "$STAGE/DEBIAN/prerm" "$STAGE/DEBIAN/postinst" \
+           "$STAGE/etc/NetworkManager/dispatcher.d/50-umbra"
 
 mkdir -p "$SRC/dist"
 DEB="$SRC/dist/umbra_${VERSION}_${ARCH}.deb"

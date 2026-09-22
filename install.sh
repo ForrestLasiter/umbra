@@ -63,6 +63,13 @@ if [ -d /usr/share/polkit-1/actions ]; then
   chmod 0644 /usr/share/polkit-1/actions/com.forrestlasiter.umbra.policy
 fi
 
+# NetworkManager dispatcher: re-assert the active posture on network change.
+if [ -d /etc/NetworkManager/dispatcher.d ]; then
+  cp "$SRC/packaging/umbra-nm-dispatcher" /etc/NetworkManager/dispatcher.d/50-umbra
+  chown root:root /etc/NetworkManager/dispatcher.d/50-umbra 2>/dev/null || true
+  chmod 0755 /etc/NetworkManager/dispatcher.d/50-umbra
+fi
+
 echo "[4/4] boot service"
 if [ "${1:-}" = "--with-boot-service" ]; then
   mkdir -p /etc/umbra

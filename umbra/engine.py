@@ -102,6 +102,10 @@ class Engine:
                 # `closed`: leave applied controls in place (safer) and report.
                 raise SystemExitSafe(report) from exc
 
+        # Record which posture is now active, so the NetworkManager dispatcher
+        # can re-assert it when the link changes.
+        if not self.runner.dry_run and report.ok:
+            snapshots.set_active_profile(profile.name)
         return report
 
     def restore(self, tx_id: str | None = None) -> list[str]:

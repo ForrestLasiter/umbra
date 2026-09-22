@@ -174,6 +174,22 @@ def current_transaction_id() -> str | None:
     return ptr.read_text().strip() if ptr.exists() else None
 
 
+# --- active-profile marker (for the NetworkManager dispatcher to re-apply) ----
+
+def set_active_profile(name: str) -> None:
+    paths.state_dir().mkdir(parents=True, exist_ok=True)
+    (paths.state_dir() / "active-profile").write_text(name + "\n")
+
+
+def active_profile() -> str | None:
+    p = paths.state_dir() / "active-profile"
+    return p.read_text().strip() if p.exists() else None
+
+
+def clear_active_profile() -> None:
+    (paths.state_dir() / "active-profile").unlink(missing_ok=True)
+
+
 def find_incomplete() -> list[str]:
     """Transaction ids whose status is still `in-progress` -- i.e. a prior run
     crashed. The engine restores these before doing anything else."""
@@ -220,4 +236,5 @@ def restore_transaction(runner: Runner, tx_id: str | None = None) -> list[str]:
 
     if not runner.dry_run:
         (tx_dir / "status").write_text("restored\n")
+        clear_active_profile()          # back to stock: nothing to re-apply
     return failed

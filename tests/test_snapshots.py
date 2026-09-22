@@ -60,3 +60,11 @@ def test_dry_run_records_nothing(state_dir):
     with snapshots.Transaction(runner, profile="home") as tx:
         tx.writer.record("telemetry.hosts_sinkhole", "file_replace", {"path": "x"})
     assert tx.writer.recorded == []
+
+
+def test_active_profile_marker_round_trip(state_dir):
+    assert snapshots.active_profile() is None
+    snapshots.set_active_profile("travel")
+    assert snapshots.active_profile() == "travel"
+    snapshots.clear_active_profile()
+    assert snapshots.active_profile() is None

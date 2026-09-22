@@ -1,0 +1,28 @@
+#!/bin/sh
+# NetworkManager dispatcher: re-assert the active umbra posture when a link comes
+# up, so the MAC, hostname suppression, firewall and killswitch hold as you move
+# between networks. Installed to /etc/NetworkManager/dispatcher.d/50-umbra
+# (must be root-owned and not world-writable, or NetworkManager ignores it).
+#
+# $1 = interface, $2 = action ("up", "down", ...).
+[ "$2" = "up" ] || exit 0
+
+AP=/var/lib/umbra/active-profile
+[ -f "$AP" ] || exit 0            # no active posture -> nothing to do
+
+# Debounce: applying a profile can itself nudge NetworkManager (MAC/hostname
+# reload), which would re-fire this script. Skip if we ran in the last 15s.
+LOCK=/run/umbra-dispatch.ts
+now=$(date +%s 2>/dev/null || echo 0)
+if [ -f "$LOCK" ]; then
+  last=$(cat "$LOCK" 2>/dev/null || echo 0)
+  [ $((now - last)) -lt 15 ] && exit 0
+fi
+echo "$now" > "$LOCK" 2>/dev/null || true
+
+PROFILE=$(cat "$AP" 2>/dev/null)
+[ -n "$PROFILE" ] || exit 0
+
+# apply is idempotent (acts only on drift), so this is cheap when nothing moved.
+/usr/bin/umbra --confirm apply "$PROFILE" >/dev/null 2>&1 || true
+exit 0
