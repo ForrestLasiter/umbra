@@ -21,6 +21,7 @@ mkdir -p "$STAGE/DEBIAN" \
          "$STAGE/usr/bin" \
          "$STAGE/usr/share/man/man1" \
          "$STAGE/usr/share/polkit-1/actions" \
+         "$STAGE/usr/share/applications" \
          "$STAGE/etc/NetworkManager/dispatcher.d" \
          "$STAGE/lib/systemd/system" \
          "$STAGE/etc/umbra"
@@ -39,6 +40,7 @@ chmod 0755 "$STAGE/usr/bin/umbra"
 cp "$SRC/packaging/umbra.1" "$STAGE/usr/share/man/man1/umbra.1"
 cp "$SRC/packaging/com.forrestlasiter.umbra.policy" "$STAGE/usr/share/polkit-1/actions/"
 cp "$SRC/packaging/umbra-nm-dispatcher" "$STAGE/etc/NetworkManager/dispatcher.d/50-umbra"
+cp "$SRC/packaging/umbra-tray.desktop" "$STAGE/usr/share/applications/umbra-tray.desktop"
 cp "$SRC/packaging/umbra-boot.service" "$STAGE/lib/systemd/system/umbra-boot.service"
 echo home > "$STAGE/etc/umbra/boot-profile"
 
@@ -49,6 +51,7 @@ Section: admin
 Priority: optional
 Architecture: $ARCH
 Depends: python3, python3-yaml, python3-jsonschema, nftables
+Recommends: python3-gi, gir1.2-ayatanaappindicator3-0.1, policykit-1
 Maintainer: Forrest Lasiter <forrest.lasiter@gmail.com>
 Description: One-toggle privacy/anonymity/hardening posture engine
  Umbra reconciles a Linux machine to a declarative privacy posture (a profile)

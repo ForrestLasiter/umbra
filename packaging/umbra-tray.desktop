@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Umbra
+GenericName=Privacy posture toggle
+Comment=Go dark on demand — flip privacy/hardening posture from the tray
+Exec=umbra tray
+Icon=security-high
+Terminal=false
+Categories=System;Security;Settings;
+Keywords=privacy;anonymity;vpn;tor;hardening;firewall;

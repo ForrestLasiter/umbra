@@ -20,6 +20,7 @@ rm -f /usr/local/bin/umbra /usr/sbin/umbra /usr/bin/umbra
 rm -f /usr/share/man/man1/umbra.1
 rm -f /usr/share/polkit-1/actions/com.forrestlasiter.umbra.policy
 rm -f /etc/NetworkManager/dispatcher.d/50-umbra
+rm -f /usr/share/applications/umbra-tray.desktop
 rm -rf /opt/umbra
 
 echo "[4/4] leaving /etc/umbra and /var/lib/umbra (config + snapshots) intact"

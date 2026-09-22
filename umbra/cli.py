@@ -230,6 +230,11 @@ def cmd_dashboard(args, runner: Runner) -> int:
     return 0
 
 
+def cmd_tray(args, runner: Runner) -> int:
+    from umbra.tray import run
+    return run()
+
+
 def cmd_doctor(args, runner: Runner) -> int:
     from umbra.doctor import run_doctor
     profile = load_profile(args.profile or "home", args.profiles_dir)
@@ -326,6 +331,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("profile", nargs="?", help="profile to check (default: home)")
 
     sub.add_parser("panic", help="go dark now (apply the paranoid profile)")
+    sub.add_parser("tray", help="run the system-tray posture toggle (desktop)")
 
     sp = sub.add_parser("vpn", help="import a WireGuard config for tunnel(wireguard)")
     sp.add_argument("config", help="path to a .conf file to import")
@@ -345,6 +351,7 @@ _HANDLERS = {
     "doctor": cmd_doctor,
     "panic": cmd_panic,
     "vpn": cmd_vpn,
+    "tray": cmd_tray,
 }
 
 

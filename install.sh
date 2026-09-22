@@ -70,6 +70,12 @@ if [ -d /etc/NetworkManager/dispatcher.d ]; then
   chmod 0755 /etc/NetworkManager/dispatcher.d/50-umbra
 fi
 
+# desktop launcher for the tray toggle
+if [ -d /usr/share/applications ]; then
+  cp "$SRC/packaging/umbra-tray.desktop" /usr/share/applications/umbra-tray.desktop
+  chmod 0644 /usr/share/applications/umbra-tray.desktop
+fi
+
 echo "[4/4] boot service"
 if [ "${1:-}" = "--with-boot-service" ]; then
   mkdir -p /etc/umbra
