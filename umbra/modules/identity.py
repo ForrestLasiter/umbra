@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from umbra import fsutil
 from umbra.modules.base import Action, Compliance, Control, Module, VerifyResult
 
 _NM_CONF = Path("/etc/NetworkManager/conf.d/01-umbra-hostname.conf")
@@ -70,15 +71,9 @@ class IdentityModule(Module):
 
     def apply(self, action: Action, snap) -> None:
         if action.control == "identity.dhcp_hostname":
-            existed = _NM_CONF.exists()
-            snap.record("identity.dhcp_hostname", "file_replace", {
-                "path": str(_NM_CONF),
-                "existed": existed,
-                "content": _NM_CONF.read_text() if existed else "",
-            })
-            _NM_CONF.parent.mkdir(parents=True, exist_ok=True)
-            _NM_CONF.write_text(_NM_CONTENT)
-            self.runner.run(["nmcli", "general", "reload"], read_only=False)
+            snap.record("identity.dhcp_hostname", "file_replace", fsutil.snapshot_path(_NM_CONF))
+            fsutil.atomic_write_text(_NM_CONF, _NM_CONTENT, mode=0o644)
+            self.runner.run(["nmcli", "general", "reload"], read_only=False, check=True)
 
     def verify(self, action: Action) -> VerifyResult:
         state = self.measure().get(action.control)

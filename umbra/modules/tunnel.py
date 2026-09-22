@@ -34,10 +34,10 @@ Honest limits (surfaced by measure()):
 
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
 
+from umbra import fsutil
 from umbra.modules.base import Action, Compliance, Control, Module, VerifyResult
 
 _WG_DIR = Path("/etc/wireguard")
@@ -268,36 +268,27 @@ class TunnelModule(Module):
                 self._apply_wg_killswitch(snap)
 
     def _apply_tor_config(self, snap) -> None:
-        existed = _TORRC.exists()
-        content = _TORRC.read_text() if existed else ""
-        snap.record("tunnel.tor_config", "file_replace",
-                    {"path": str(_TORRC), "existed": existed, "content": content})
+        torrc = fsutil.snapshot_path(_TORRC)
+        snap.record("tunnel.tor_config", "file_replace", torrc)
+        content = torrc["content"] or ""
         cleaned = _strip_tor_block(content)
         if cleaned and not cleaned.endswith("\n"):
             cleaned += "\n"
-        _TORRC.write_text(cleaned + _torrc_block())
+        fsutil.atomic_write_text(_TORRC, cleaned + _torrc_block(),
+                                 mode=torrc["mode"], uid=torrc["uid"], gid=torrc["gid"])
 
         # Point the system resolver at loopback so DNS goes through Tor reliably
-        # (a loopback->loopback redirect), and no LAN/IPv6 resolver leaks.
-        was_symlink = _RESOLV.is_symlink()
-        link_target = os.readlink(_RESOLV) if was_symlink else None
-        r_existed = was_symlink or _RESOLV.exists()
-        r_content = _RESOLV.read_text() if (r_existed and not was_symlink) else None
-        snap.record("tunnel.tor_resolv", "path_restore", {
-            "path": str(_RESOLV),
-            "was_symlink": was_symlink,
-            "link_target": link_target,
-            "existed": r_existed,
-            "content": r_content,
-        })
+        # (a loopback->loopback redirect), and no LAN/IPv6 resolver leaks. The
+        # snapshot preserves the original symlink-vs-file kind exactly.
+        snap.record("tunnel.tor_resolv", "path_restore", fsutil.snapshot_path(_RESOLV))
         if _RESOLV.is_symlink() or _RESOLV.exists():
             _RESOLV.unlink()
-        _RESOLV.write_text(_RESOLV_CONTENT)
+        fsutil.atomic_write_text(_RESOLV, _RESOLV_CONTENT, mode=0o644)
 
         # Force the daemon to load the new TransPort/DNSPort. The route control
         # only *starts* Tor if it's stopped, so if Tor was already running it
         # would otherwise never pick up this config change.
-        self.runner.run(["systemctl", "restart", _TOR_UNIT], read_only=False)
+        self.runner.run(["systemctl", "restart", _TOR_UNIT], read_only=False, check=True)
 
     def _apply_route(self, snap) -> None:
         unit = self._route_unit()

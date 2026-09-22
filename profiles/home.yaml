@@ -20,7 +20,7 @@ modules:
     enabled: true
     mac_randomization: per-network
     suppress_probe_requests: true
-    bluetooth: non-discoverable
+    bluetooth: "on"          # home: keep Bluetooth usable (travel/paranoid = off)
     radios: [wifi, bluetooth]
   netdark:
     enabled: true

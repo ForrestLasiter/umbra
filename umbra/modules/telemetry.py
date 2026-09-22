@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from umbra import fsutil
 from umbra.modules.base import Action, Compliance, Control, Module, VerifyResult
 
 _HOSTS = Path("/etc/hosts")
@@ -81,13 +82,8 @@ class TelemetryModule(Module):
             return states
 
         # hosts sinkhole
-        if self.config.get("egress") in {"blocklist", "allowlist"} or self.config.get("blocklists"):
+        if self.config.get("egress") == "blocklist" or self.config.get("blocklists"):
             states["telemetry.hosts_sinkhole"] = self._measure_hosts()
-        if self.config.get("egress") == "allowlist":
-            states["telemetry.egress_allowlist"] = ControlState(
-                "telemetry.egress_allowlist", Compliance.UNSUPPORTED,
-                detail="egress allowlist lands with the tunnel module (Phase 2)",
-            )
         # OS telemetry units
         if self.config.get("disable_os_telemetry"):
             states["telemetry.disable_os_telemetry"] = self._measure_units()
@@ -146,31 +142,31 @@ class TelemetryModule(Module):
             self._apply_units(snap)
 
     def _apply_hosts(self, snap) -> None:
-        existed = _HOSTS.exists()
-        current = _HOSTS.read_text() if existed else ""
-        # Snapshot the whole file first (full-state restore).
-        snap.record("telemetry.hosts_sinkhole", "hosts_replace", {
-            "path": str(_HOSTS),
-            "existed": existed,
-            "content": current,
-        })
+        # Snapshot the whole file first (full-state restore, with metadata).
+        prior = fsutil.snapshot_path(_HOSTS)
+        snap.record("telemetry.hosts_sinkhole", "hosts_replace", prior)
+        current = prior["content"] or ""
         # Idempotent: strip any prior umbra block, then append the fresh one.
         cleaned = _strip_block(current)
         if cleaned and not cleaned.endswith("\n"):
             cleaned += "\n"
-        _HOSTS.write_text(cleaned + self._sinkhole_block())
+        fsutil.atomic_write_text(_HOSTS, cleaned + self._sinkhole_block(),
+                                 mode=prior["mode"], uid=prior["uid"], gid=prior["gid"])
 
     def _apply_units(self, snap) -> None:
         for unit in _TELEMETRY_UNITS:
             if not self._unit_active(unit):
                 continue
             enabled = self.runner.run(["systemctl", "is-enabled", unit], read_only=True)
-            snap.record("telemetry.disable_os_telemetry", "systemd_unit", {
+            # Unique snapshot id PER unit, else multiple services collide on one
+            # snapshot file and only the last is restorable.
+            stem = unit.rsplit(".", 1)[0]
+            snap.record(f"telemetry.svc_{stem}", "systemd_unit", {
                 "unit": unit,
                 "was_enabled": enabled.stdout.strip() == "enabled",
                 "was_active": True,
             })
-            self.runner.run(["systemctl", "disable", "--now", unit], read_only=False)
+            self.runner.run(["systemctl", "disable", "--now", unit], read_only=False, check=True)
 
     # --- verify --------------------------------------------------------------
 

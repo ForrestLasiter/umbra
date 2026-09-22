@@ -4,7 +4,7 @@ name: travel
 description: >
   Hostile-network mode. Assume the LAN and ISP are adversarial: MAC randomized,
   all local discovery silenced, Bluetooth off, all traffic forced through the
-  tunnel with a killswitch, egress restricted to an allowlist.
+  tunnel with a killswitch, and known telemetry sinkholed.
 extends: home
 meta:
   fail_mode: closed
@@ -30,7 +30,7 @@ modules:
     profile_ref: vpn
     killswitch: true
     dns: tunnel
-    leak_guard: [dns, ipv6, webrtc]
+    leak_guard: [dns, ipv6]
   telemetry:
     enabled: true
-    egress: allowlist
+    egress: blocklist

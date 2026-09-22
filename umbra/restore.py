@@ -11,9 +11,7 @@ must be idempotent: running a restore twice is a no-op.
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
+from umbra import fsutil
 from umbra.runner import Runner
 
 # The closed set. A snapshot whose restore_method is not in here is refused.
@@ -87,14 +85,10 @@ def _sysctl_set(runner: Runner, prior: dict) -> None:
 
 
 def _file_replace(runner: Runner, prior: dict) -> None:
-    """Restore a file's exact prior bytes, or delete it if it did not exist."""
-    path = Path(prior["path"])
-    if not prior.get("existed", False):
-        path.unlink(missing_ok=True)
-        return
-    path.write_text(prior["content"])
-    if "mode" in prior:
-        os.chmod(path, prior["mode"])
+    """Restore a file's exact prior bytes + mode/owner, or delete it if absent.
+
+    Dry-run safe, atomic, metadata-preserving (see fsutil.restore_path)."""
+    fsutil.restore_path(prior, runner.dry_run)
 
 
 # /etc/hosts is just a file; hosts_replace shares file_replace's mechanics but is
@@ -104,22 +98,9 @@ _hosts_replace = _file_replace
 
 
 def _path_restore(runner: Runner, prior: dict) -> None:
-    """Restore a path that may have been a symlink, a file, or absent.
-
-    Used for /etc/resolv.conf, which is often a symlink (NetworkManager /
-    systemd-resolved). file_replace would turn a restored symlink into a plain
-    file; this preserves the original kind exactly.
-    """
-    path = Path(prior["path"])
-    if path.is_symlink() or path.exists():
-        try:
-            path.unlink()
-        except (OSError, IsADirectoryError):
-            pass
-    if prior.get("was_symlink"):
-        path.symlink_to(prior["link_target"])
-    elif prior.get("existed"):
-        path.write_text(prior.get("content") or "")
+    """Restore a path that may have been a symlink, a file, or absent (dry-run
+    safe, atomic, preserves the symlink-vs-file kind and metadata)."""
+    fsutil.restore_path(prior, runner.dry_run)
 
 
 def _not_yet(name: str):

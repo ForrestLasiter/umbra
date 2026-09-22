@@ -50,7 +50,7 @@
             "enabled": { "type": "boolean" },
             "mac_randomization": { "enum": ["off", "per-network", "per-boot", "full"] },
             "suppress_probe_requests": { "type": "boolean" },
-            "bluetooth": { "enum": ["on", "off", "non-discoverable"] },
+            "bluetooth": { "enum": ["on", "off"] },
             "radios": {
               "type": "array",
               "items": { "enum": ["wifi", "bluetooth", "wwan", "nfc"] },
@@ -104,7 +104,7 @@
           "properties": {
             "enabled": { "type": "boolean" },
             "blocklists": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
-            "egress": { "enum": ["off", "blocklist", "allowlist"] },
+            "egress": { "enum": ["off", "blocklist"] },
             "disable_os_telemetry": { "type": "boolean" }
           }
         }

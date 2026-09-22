@@ -4,7 +4,7 @@ name: paranoid
 description: >
   Go dark. Maximum reduction of observable signature and attack surface. MAC
   fully randomized (or radios killed), zero local broadcasts, no listening
-  services, traffic over Tor (or radios off entirely), egress allowlist only.
+  services, traffic over Tor (or radios off entirely), telemetry sinkholed.
   NOTE: "radios off" is the only true-invisibility setting; with wifi permitted
   the device is still an RF emitter and detectable as such.
 extends: travel
@@ -38,8 +38,8 @@ modules:
     mode: tor
     killswitch: true
     dns: tunnel
-    leak_guard: [dns, ipv6, webrtc]
+    leak_guard: [dns, ipv6]
   telemetry:
     enabled: true
-    egress: allowlist
+    egress: blocklist
     disable_os_telemetry: true

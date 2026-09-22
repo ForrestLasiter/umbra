@@ -72,39 +72,51 @@ class Engine:
         # 1) Crash recovery: never build on top of a half-applied prior run.
         report.recovered = self._recover_incomplete()
 
-        # 2) One transaction for the whole reconcile.
+        # 2) Already compliant? Still record the active posture (so the network
+        #    dispatcher re-asserts it) -- there is just nothing to change.
         actions = self.plan(profile)
         if not actions:
             log.info("already compliant with profile %s; nothing to do", profile.name)
+            if not self.runner.dry_run:
+                snapshots.set_active_profile(profile.name)
             return report
 
-        with snapshots.Transaction(self.runner, profile.name) as tx:
-            report.transaction_id = tx.id
-            try:
-                for name in APPLY_ORDER:
-                    module = self.modules[name]
-                    module.configure(profile.module_config(name))
-                    for action in module.plan():
-                        module.apply(action, tx.writer)
-                        report.applied.append(action.control)
-                        result = module.verify(action)
-                        if result.ok:
-                            report.verified.append(action.control)
-                        else:
-                            report.failed.append(action.control)
-            except Exception as exc:  # noqa: BLE001
+        # 3) One transaction for the whole reconcile.
+        tx = snapshots.Transaction(self.runner, profile.name)
+        tx.__enter__()
+        report.transaction_id = tx.id
+        try:
+            for name in APPLY_ORDER:
+                module = self.modules[name]
+                module.configure(profile.module_config(name))
+                for action in module.plan():
+                    module.apply(action, tx.writer)
+                    report.applied.append(action.control)
+                    if module.verify(action).ok:
+                        report.verified.append(action.control)
+                    else:
+                        report.failed.append(action.control)
+            # A failed verification MUST fail the transaction, same as an
+            # exception -- a posture that didn't take is not "applied".
+            if report.failed:
+                raise _ApplyFailed("verification failed for: " + ", ".join(report.failed))
+            tx.commit()
+        except Exception as exc:  # noqa: BLE001
+            tx.mark_failed()
+            if not isinstance(exc, _ApplyFailed):
                 log.error("apply failed: %s", exc)
                 report.failed.append(f"<exception: {exc}>")
-                if profile.fail_mode == "open":
-                    # Favour connectivity: undo this transaction entirely.
-                    snapshots.restore_transaction(self.runner, tx.id)
-                    report.restored = True
-                # `closed`: leave applied controls in place (safer) and report.
-                raise SystemExitSafe(report) from exc
+            if profile.fail_mode == "open":
+                # Favour connectivity: undo this transaction entirely.
+                snapshots.restore_transaction(self.runner, tx.id)
+                report.restored = True
+            # `closed`: leave applied controls in place; tx stays failed and
+            # `current` points at it so the user can `umbra normal` to undo.
+            # Never record active-profile for a failed/unverified posture.
+            raise SystemExitSafe(report) from exc
 
-        # Record which posture is now active, so the NetworkManager dispatcher
-        # can re-assert it when the link changes.
-        if not self.runner.dry_run and report.ok:
+        # Success: record which posture is now active.
+        if not self.runner.dry_run:
             snapshots.set_active_profile(profile.name)
         return report
 
@@ -123,9 +135,13 @@ class Engine:
         return recovered
 
 
+class _ApplyFailed(Exception):
+    """Internal: a verification failed, so the transaction must fail."""
+
+
 class SystemExitSafe(Exception):
-    """Carries an ApplyReport out of a failed `closed`-mode apply so the CLI can
-    print a useful summary instead of a bare traceback."""
+    """Carries an ApplyReport out of a failed apply so the CLI can print a useful
+    summary instead of a bare traceback."""
 
     def __init__(self, report: ApplyReport) -> None:
         super().__init__("apply aborted; see report")

@@ -14,6 +14,8 @@ from umbra.restore import RESTORE_PRIMITIVES, apply_restore
 class FakeRunner:
     """Stand-in for Runner that records commands instead of running them."""
 
+    dry_run = False
+
     def __init__(self) -> None:
         self.calls: list[list[str]] = []
 

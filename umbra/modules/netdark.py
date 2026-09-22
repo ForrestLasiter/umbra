@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from umbra import fsutil
 from umbra.modules.base import Action, Compliance, Control, Module, VerifyResult
 
 _NFT_RULESET = """\
@@ -203,20 +204,14 @@ class NetdarkModule(Module):
             # Distinct control id per unit so each gets its own snapshot file.
             snap.record(f"netdark.{proto}_{stem}", "systemd_unit",
                         {"unit": unit, "was_enabled": enabled, "was_active": True})
-            self.runner.run(["systemctl", "disable", "--now", unit], read_only=False)
+            self.runner.run(["systemctl", "disable", "--now", unit], read_only=False, check=True)
 
     def _apply_llmnr(self, snap) -> None:
-        existed = _RESOLVED_DROPIN.exists()
-        snap.record("netdark.llmnr", "file_replace", {
-            "path": str(_RESOLVED_DROPIN),
-            "existed": existed,
-            "content": _RESOLVED_DROPIN.read_text() if existed else "",
-        })
-        _RESOLVED_DROPIN.parent.mkdir(parents=True, exist_ok=True)
-        _RESOLVED_DROPIN.write_text(_RESOLVED_CONTENT)
+        snap.record("netdark.llmnr", "file_replace", fsutil.snapshot_path(_RESOLVED_DROPIN))
+        fsutil.atomic_write_text(_RESOLVED_DROPIN, _RESOLVED_CONTENT, mode=0o644)
         # Pick up the drop-in now. (Restore removes the file; LLMNR fully reverts
         # on the next resolved restart / reboot.)
-        self.runner.run(["systemctl", "restart", "systemd-resolved"], read_only=False)
+        self.runner.run(["systemctl", "restart", "systemd-resolved"], read_only=False, check=True)
 
     # --- verify / restore ----------------------------------------------------
 

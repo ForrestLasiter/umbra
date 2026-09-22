@@ -7,10 +7,11 @@ Phase-2 controls:
   * radio_<type>   -- hard rfkill soft-block for any radio the profile does NOT
                       permit (radios: [wifi] blocks bluetooth/wwan/nfc; [] = all).
 
+Bluetooth is on|off (a hard rfkill block); there is no half-measure
+"non-discoverable" mode, because it can't be enforced reliably without a live
+adapter -- `bluetooth: off` is the honest privacy setting.
+
 Honest limits (surfaced by measure()):
-  * bluetooth: non-discoverable needs a live adapter + bluetoothctl; Phase 2 only
-    guarantees the reliable control (a hard block via `bluetooth: off`). The
-    non-discoverable toggle is Phase 2.1.
   * The MAC drop-in takes effect on the next NetworkManager reload / reconnect;
     apply triggers a reload, but a restore removes the file and the old value
     returns on the following reload.
@@ -20,6 +21,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from umbra import fsutil
 from umbra.modules.base import Action, Compliance, Control, Module, VerifyResult
 
 _MAC_CONF = Path("/etc/NetworkManager/conf.d/00-umbra-mac.conf")
@@ -91,12 +93,6 @@ class RfModule(Module):
             states["rf.mac"] = self._measure_mac()
         for radio in self._blocked_radios():
             states[f"rf.radio_{radio}"] = self._measure_radio(radio)
-        # Honest note about the one control we don't fully enforce yet.
-        if self.config.get("bluetooth") == "non-discoverable":
-            states["rf.bt_discoverable"] = ControlState(
-                "rf.bt_discoverable", Compliance.UNSUPPORTED,
-                detail="use bluetooth: off for a hard guarantee; toggle is Phase 2.1",
-            )
         return states
 
     def _measure_mac(self) -> "ControlState":  # noqa: F821
@@ -149,17 +145,12 @@ class RfModule(Module):
             self._apply_radio(action.control.removeprefix("rf.radio_"), snap)
 
     def _apply_mac(self, snap) -> None:
-        existed = _MAC_CONF.exists()
-        snap.record("rf.mac", "file_replace", {
-            "path": str(_MAC_CONF),
-            "existed": existed,
-            "content": _MAC_CONF.read_text() if existed else "",
-        })
-        _MAC_CONF.parent.mkdir(parents=True, exist_ok=True)
-        _MAC_CONF.write_text(_mac_conf_text(self.config.get("mac_randomization", "random")))
-        # Ask NetworkManager to pick up the drop-in now (harmless re-read; not a
-        # snapshotted state change of its own).
-        self.runner.run(["nmcli", "general", "reload"], read_only=False)
+        snap.record("rf.mac", "file_replace", fsutil.snapshot_path(_MAC_CONF))
+        fsutil.atomic_write_text(
+            _MAC_CONF, _mac_conf_text(self.config.get("mac_randomization", "random")),
+            mode=0o644)
+        # Ask NetworkManager to pick up the drop-in now.
+        self.runner.run(["nmcli", "general", "reload"], read_only=False, check=True)
 
     def _apply_radio(self, radio: str, snap) -> None:
         state = self.runner.run(["rfkill", "list", radio], read_only=True)

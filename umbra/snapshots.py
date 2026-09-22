@@ -19,14 +19,18 @@ How that promise is kept:
 from __future__ import annotations
 
 import json
-import os
+import re
 import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 
-from umbra import paths
+from umbra import fsutil, paths
 from umbra.restore import RESTORE_PRIMITIVES, apply_restore
 from umbra.runner import Runner
+
+# A transaction id is a timestamp + short hex. Anything else (e.g. a path with
+# "/" or "..") is rejected before it can be used to build a filesystem path.
+_TX_ID_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z_[0-9a-f]{4,}$")
 
 
 def _now_id() -> str:
@@ -35,16 +39,8 @@ def _now_id() -> str:
     return f"{stamp}_{secrets.token_hex(2)}"
 
 
-def _fsync_path(path: Path) -> None:
-    """Force a file's bytes to disk. Best-effort on platforms that disallow it."""
-    try:
-        fd = os.open(path, os.O_RDONLY)
-        try:
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-    except (OSError, PermissionError):  # e.g. directories on Windows
-        pass
+def _valid_tx_id(tx_id: str) -> bool:
+    return bool(_TX_ID_RE.match(tx_id))
 
 
 class SnapshotWriter:
@@ -77,9 +73,10 @@ class SnapshotWriter:
         mod_dir = self._tx_dir / module
         mod_dir.mkdir(parents=True, exist_ok=True)
         snap_path = mod_dir / f"{control.split('.', 1)[1]}.snap"
-        snap_path.write_text(json.dumps(payload, indent=2))
-        _fsync_path(snap_path)          # durable before the caller mutates
-        self._recorded.append(control)
+        # Atomic + fsync'd, so the snapshot is durable before the caller mutates.
+        fsutil.atomic_write_text(snap_path, json.dumps(payload, indent=2))
+        if control not in self._recorded:
+            self._recorded.append(control)
 
     @property
     def recorded(self) -> list[str]:
@@ -140,33 +137,46 @@ class Transaction:
             "controls": self.writer.recorded,
         }
         manifest_path = self.dir / "manifest.json"
-        manifest_path.write_text(json.dumps(manifest, indent=2))
-        _fsync_path(manifest_path)
+        fsutil.atomic_write_text(manifest_path, json.dumps(manifest, indent=2))
         self._write_status("committed")
         _set_current(self.id)
         self._committed = True
 
+    def mark_failed(self) -> None:
+        """Record an explicit failed transaction and point `current` at it, so the
+        partial posture is undoable via `umbra normal` / `umbra restore`."""
+        if self.runner.dry_run:
+            return
+        self._write_status("failed")
+        _set_current(self.id)
+
     def __exit__(self, exc_type, exc, tb) -> bool:
+        # Convenience for `with Transaction(...)` users: clean exit commits, an
+        # exception marks failed. The engine instead drives commit/mark_failed
+        # explicitly (so it never relies on this), which leaves _committed set and
+        # makes the branches below no-ops.
+        if self.runner.dry_run:
+            return False
         if exc_type is not None:
-            # Something threw. Leave snapshots in place (fail-mode handling lives
-            # in the engine); just record that this tx did not complete cleanly.
-            if not self.runner.dry_run:
+            if not self._committed:
                 self._write_status("failed")
-            return False  # re-raise
-        if not self._committed:
+        elif not self._committed:
             self.commit()
-        return False
+        return False  # never suppress
 
     def _write_status(self, value: str) -> None:
-        (self.dir / "status").write_text(value + "\n")
+        fsutil.atomic_write_text(self.dir / "status", value + "\n")
 
 
 # --- module-level helpers ----------------------------------------------------
 
 def _set_current(tx_id: str) -> None:
     """Point `state/current` at a transaction (a plain pointer file, portable)."""
-    paths.state_dir().mkdir(parents=True, exist_ok=True)
-    (paths.state_dir() / "current").write_text(tx_id + "\n")
+    fsutil.atomic_write_text(paths.state_dir() / "current", tx_id + "\n")
+
+
+def _clear_current() -> None:
+    (paths.state_dir() / "current").unlink(missing_ok=True)
 
 
 def current_transaction_id() -> str | None:
@@ -177,8 +187,7 @@ def current_transaction_id() -> str | None:
 # --- active-profile marker (for the NetworkManager dispatcher to re-apply) ----
 
 def set_active_profile(name: str) -> None:
-    paths.state_dir().mkdir(parents=True, exist_ok=True)
-    (paths.state_dir() / "active-profile").write_text(name + "\n")
+    fsutil.atomic_write_text(paths.state_dir() / "active-profile", name + "\n")
 
 
 def active_profile() -> str | None:
@@ -215,6 +224,8 @@ def restore_transaction(runner: Runner, tx_id: str | None = None) -> list[str]:
     tx_id = tx_id or current_transaction_id()
     if tx_id is None:
         return []
+    if not _valid_tx_id(tx_id):
+        raise ValueError(f"refusing malformed transaction id: {tx_id!r}")
     tx_dir = paths.transactions_dir() / tx_id
     reader = SnapshotReader(tx_dir)
 
@@ -235,6 +246,12 @@ def restore_transaction(runner: Runner, tx_id: str | None = None) -> list[str]:
                 failed.append(control)
 
     if not runner.dry_run:
-        (tx_dir / "status").write_text("restored\n")
-        clear_active_profile()          # back to stock: nothing to re-apply
+        if failed:
+            # Partial restore: keep the pointer + active-profile so it can be
+            # retried; mark it distinctly, not "restored".
+            fsutil.atomic_write_text(tx_dir / "status", "restore-failed\n")
+        else:
+            fsutil.atomic_write_text(tx_dir / "status", "restored\n")
+            _clear_current()            # this posture is fully undone
+            clear_active_profile()      # back to stock: nothing to re-apply
     return failed

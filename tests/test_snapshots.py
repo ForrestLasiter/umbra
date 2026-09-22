@@ -68,3 +68,44 @@ def test_active_profile_marker_round_trip(state_dir):
     assert snapshots.active_profile() == "travel"
     snapshots.clear_active_profile()
     assert snapshots.active_profile() is None
+
+
+def test_restore_success_clears_current_and_marks_restored(state_dir, tmp_path):
+    target = tmp_path / "hosts"
+    target.write_text("original\n")
+    runner = Runner(dry_run=False)
+    with snapshots.Transaction(runner, "home") as tx:
+        tx.writer.record("telemetry.hosts_sinkhole", "file_replace",
+                         {"path": str(target), "existed": True, "content": "original\n"})
+        target.write_text("MUTATED\n")
+    snapshots.set_active_profile("home")
+    assert snapshots.current_transaction_id() == tx.id
+
+    failed = snapshots.restore_transaction(runner, tx.id)
+    assert failed == []
+    assert target.read_text() == "original\n"
+    assert snapshots.current_transaction_id() is None          # pointer cleared
+    assert snapshots.active_profile() is None                  # active cleared
+    assert (tx.dir / "status").read_text().strip() == "restored"
+
+
+def test_restore_failure_keeps_pointer_and_marks_restore_failed(state_dir, tmp_path, monkeypatch):
+    runner = Runner(dry_run=False)
+    with snapshots.Transaction(runner, "home") as tx:
+        tx.writer.record("telemetry.hosts_sinkhole", "file_replace",
+                         {"path": str(tmp_path / "h"), "existed": False})
+
+    def boom(*a, **k):
+        raise RuntimeError("restore blew up")
+    monkeypatch.setattr(snapshots, "apply_restore", boom)
+
+    failed = snapshots.restore_transaction(runner, tx.id)
+    assert failed == ["telemetry.hosts_sinkhole"]
+    assert snapshots.current_transaction_id() == tx.id         # kept for retry
+    assert (tx.dir / "status").read_text().strip() == "restore-failed"
+
+
+def test_malformed_transaction_id_is_rejected(state_dir):
+    import pytest
+    with pytest.raises(ValueError):
+        snapshots.restore_transaction(Runner(dry_run=False), "../../etc/passwd")
