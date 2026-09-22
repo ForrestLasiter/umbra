@@ -11,6 +11,8 @@ extends: travel
 meta:
   fail_mode: closed
   require_confirm: true
+  requires: [firewall, ipv6_privacy, discovery, telemetry, kernel, hostname, mac,
+             bluetooth_off, webcam_off, tor]
 modules:
   kernel:
     enabled: true

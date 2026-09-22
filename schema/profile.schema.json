@@ -16,7 +16,15 @@
       "additionalProperties": false,
       "properties": {
         "fail_mode": { "enum": ["closed", "open"], "default": "closed" },
-        "require_confirm": { "type": "boolean", "default": false }
+        "require_confirm": { "type": "boolean", "default": false },
+        "requires": {
+          "type": "array",
+          "items": {
+            "enum": ["firewall", "ipv6_privacy", "discovery", "telemetry", "kernel",
+                     "hostname", "mac", "bluetooth_off", "webcam_off", "wireguard", "tor"]
+          },
+          "uniqueItems": true
+        }
       }
     },
     "modules": {

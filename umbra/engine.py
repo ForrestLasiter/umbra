@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from umbra import snapshots
+from umbra import capabilities, snapshots
 from umbra.modules import build_modules
 from umbra.modules.base import APPLY_ORDER, Action, Compliance, ControlState
 from umbra.profiles import Profile
@@ -72,11 +72,15 @@ class Engine:
         # 1) Crash recovery: never build on top of a half-applied prior run.
         report.recovered = self._recover_incomplete()
 
-        # 2) Already compliant? Still record the active posture (so the network
-        #    dispatcher re-asserts it) -- there is just nothing to change.
+        # 2) Already compliant? Still verify REQUIRED capabilities and record the
+        #    active posture -- there is just nothing to change.
         actions = self.plan(profile)
         if not actions:
             log.info("already compliant with profile %s; nothing to do", profile.name)
+            unmet = capabilities.unmet(capabilities.evaluate(profile, self.status(profile)))
+            if unmet:
+                report.failed.extend(f"require:{t}" for t in unmet)
+                raise SystemExitSafe(report)   # no transaction was created
             if not self.runner.dry_run:
                 snapshots.set_active_profile(profile.name)
             return report
@@ -96,10 +100,15 @@ class Engine:
                         report.verified.append(action.control)
                     else:
                         report.failed.append(action.control)
+            # A required capability that didn't verify (drifted, unknown, or
+            # unsupported) fails the transaction too -- the profile's promise
+            # wasn't met.
+            unmet = capabilities.unmet(capabilities.evaluate(profile, self.status(profile)))
+            report.failed.extend(f"require:{t}" for t in unmet)
             # A failed verification MUST fail the transaction, same as an
             # exception -- a posture that didn't take is not "applied".
             if report.failed:
-                raise _ApplyFailed("verification failed for: " + ", ".join(report.failed))
+                raise _ApplyFailed("not verified: " + ", ".join(report.failed))
             tx.commit()
         except Exception as exc:  # noqa: BLE001
             tx.mark_failed()

@@ -26,15 +26,9 @@ def test_counts():
     assert _sample().counts()["warn"] == 1
 
 
-def test_score_grades_ok_and_warn_ignores_info():
-    # sample: 1 OK (1.0) + 1 WARN (0.3) + 1 INFO (ignored) -> 1.3/2 = 65
-    assert _sample().score() == 65
-
-
-def test_score_is_none_when_nothing_gradeable():
-    r = AuditReport(profile="x", generated_at="t",
-                    checks=[Check("a", "A", "c", Status.NA), Check("b", "B", "c", Status.INFO)])
-    assert r.score() is None
+def test_score_is_none_when_no_required_capabilities():
+    # _sample() declares no required caps -> nothing to grade -> None
+    assert _sample().score() is None
 
 
 def test_html_is_accessible_and_escaped():
@@ -58,8 +52,13 @@ def test_live_mode_adds_an_accessible_refresh_link():
     assert "live view" in doc
 
 
-def test_run_audit_returns_checks_without_error():
+def test_run_audit_is_profile_aware_and_has_required_checks():
     # On any OS: probes must not throw; off-Linux they degrade to NA/INFO.
     report = run_audit(Runner(dry_run=False), load_profile("home"))
-    assert len(report.checks) == 10
+    assert len(report.checks) > 10                       # per-control + required + probes
     assert all(isinstance(c.status, Status) for c in report.checks)
+    # every required capability the profile declares appears as a check
+    for token in load_profile("home").requires:
+        assert any(c.id == f"require:{token}" for c in report.checks)
+    # off-Linux nothing is gradeable -> score is None (not a fake 100)
+    assert report.score() is None

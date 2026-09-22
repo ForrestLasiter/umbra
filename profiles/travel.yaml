@@ -9,6 +9,8 @@ extends: home
 meta:
   fail_mode: closed
   require_confirm: false
+  requires: [firewall, ipv6_privacy, discovery, telemetry, kernel, hostname, mac,
+             bluetooth_off, wireguard]
 modules:
   rf:
     enabled: true

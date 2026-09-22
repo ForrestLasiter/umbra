@@ -38,6 +38,11 @@ class Profile:
     def require_confirm(self) -> bool:
         return self.data.get("meta", {}).get("require_confirm", False)
 
+    @property
+    def requires(self) -> list[str]:
+        """Capability tokens this profile promises (meta.requires)."""
+        return list(self.data.get("meta", {}).get("requires", []))
+
     def module_config(self, module: str) -> dict:
         """The profile fragment for one module, e.g. module_config('netdark')."""
         return self.data.get("modules", {}).get(module, {"enabled": False})

@@ -8,6 +8,7 @@ description: >
 meta:
   fail_mode: open
   require_confirm: false
+  requires: [firewall, ipv6_privacy, discovery, telemetry, kernel, hostname, mac]
 modules:
   kernel:
     enabled: true
