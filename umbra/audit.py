@@ -49,6 +49,17 @@ class AuditReport:
             out[c.status.value] += 1
         return out
 
+    def score(self) -> int | None:
+        """A 0-100 posture score from the gradeable checks (OK/WARN/FAIL).
+
+        INFO and N/A don't count. Returns None when nothing is gradeable (e.g.
+        off-Linux, where every probe is N/A)."""
+        weights = {Status.OK: 1.0, Status.WARN: 0.3, Status.FAIL: 0.0}
+        graded = [weights[c.status] for c in self.checks if c.status in weights]
+        if not graded:
+            return None
+        return round(100 * sum(graded) / len(graded))
+
 
 def run_audit(runner: Runner, profile: Profile) -> AuditReport:
     report = AuditReport(

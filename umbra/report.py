@@ -57,6 +57,7 @@ a{color:var(--accent)}
 header.page{border-bottom:1px solid var(--border);padding-bottom:16px;margin-bottom:20px}
 h1{font-size:1.6rem;margin:0 0 4px}
 .meta{color:var(--muted);font-size:.9rem}
+.score{font-size:1.15rem;margin:10px 0 0}
 .summary{list-style:none;display:flex;flex-wrap:wrap;gap:10px;padding:0;margin:18px 0 24px}
 .summary li{background:var(--surface);border:1px solid var(--border);border-radius:8px;
   padding:8px 12px;display:flex;align-items:center;gap:8px;font-size:.92rem}
@@ -111,6 +112,13 @@ def render_html(report: AuditReport, live: bool = False) -> str:
 
     profile = html.escape(report.profile)
     generated = html.escape(report.generated_at)
+    score = report.score()
+    if score is None:
+        score_html = ""
+    else:
+        band = "ok" if score >= 80 else ("warn" if score >= 50 else "fail")
+        score_html = (f'<p class="score st-{band}"><strong>Posture score: '
+                      f'{score}/100</strong></p>')
     refresh = ('  ·  <a href="/">Refresh</a>' if live else "")
     footer_note = (
         "This is a live view; use Refresh to re-run the checks."
@@ -132,6 +140,7 @@ def render_html(report: AuditReport, live: bool = False) -> str:
 <header class="page">
   <h1>Umbra posture dashboard</h1>
   <p class="meta">Profile <strong>{profile}</strong> · generated {generated} (UTC){refresh}</p>
+  {score_html}
 </header>
 <main id="main">
   <h2 class="sr-only">Summary</h2>

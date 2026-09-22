@@ -208,7 +208,9 @@ def cmd_audit(args, runner: Runner) -> int:
         return 0
 
     counts = report.counts()
-    print(f"audit vs '{profile.name}'  "
+    score = report.score()
+    score_str = f"score {score}/100  " if score is not None else ""
+    print(f"audit vs '{profile.name}'  {score_str}"
           f"[ok {counts['ok']} · warn {counts['warn']} · fail {counts['fail']} · "
           f"info {counts['info']} · na {counts['na']}]\n")
     for c in report.checks:
@@ -225,6 +227,44 @@ def cmd_dashboard(args, runner: Runner) -> int:
     # Read-only; degrades to N/A without root, so no privilege gate. Blocks until
     # Ctrl-C.
     serve(args.profile or "home", args.port, runner)
+    return 0
+
+
+def cmd_doctor(args, runner: Runner) -> int:
+    from umbra.doctor import run_doctor
+    profile = load_profile(args.profile or "home", args.profiles_dir)
+    report = run_doctor(runner, profile)
+    print(f"readiness for '{profile.name}':\n")
+    for c in report.checks:
+        mark = "OK " if c.ok else ("?? " if c.optional else "XX ")
+        opt = " (optional)" if c.optional else ""
+        print(f"  {mark} {c.name}{opt}")
+        if not c.ok or c.detail:
+            print(f"        {c.detail}")
+    print(f"\n  {'READY' if report.ready else 'NOT READY — install the missing pieces above'}")
+    return 0 if report.ready else 1
+
+
+def cmd_panic(args, runner: Runner) -> int:
+    """Slam straight to the paranoid posture (go dark now)."""
+    print("PANIC — going dark (applying paranoid)...")
+    ns = argparse.Namespace(profile="paranoid", profiles_dir=args.profiles_dir, confirm=True)
+    return cmd_apply(ns, runner)
+
+
+def cmd_vpn(args, runner: Runner) -> int:
+    """Import a WireGuard config so tunnel(wireguard) profiles can use it."""
+    src = Path(args.config)
+    if not src.exists():
+        print(f"umbra: no such file: {src}", file=sys.stderr)
+        return 2
+    _require_privilege(dry_run=False)
+    dest_dir = Path("/etc/wireguard")
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f"{args.name}.conf"
+    dest.write_text(src.read_text())
+    os.chmod(dest, 0o600)
+    print(f"imported {src} -> {dest} (referenced as profile_ref: {args.name})")
     return 0
 
 
@@ -281,6 +321,15 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("dashboard", help="serve a live posture dashboard on localhost")
     sp.add_argument("profile", nargs="?", help="profile to audit against (default: home)")
     sp.add_argument("--port", type=int, default=8799, help="port to bind (default: 8799)")
+
+    sp = sub.add_parser("doctor", help="check this machine is ready for a profile")
+    sp.add_argument("profile", nargs="?", help="profile to check (default: home)")
+
+    sub.add_parser("panic", help="go dark now (apply the paranoid profile)")
+
+    sp = sub.add_parser("vpn", help="import a WireGuard config for tunnel(wireguard)")
+    sp.add_argument("config", help="path to a .conf file to import")
+    sp.add_argument("--name", default="vpn", help="profile_ref name to save it as (default: vpn)")
     return p
 
 
@@ -293,6 +342,9 @@ _HANDLERS = {
     "restore": cmd_restore,
     "audit": cmd_audit,
     "dashboard": cmd_dashboard,
+    "doctor": cmd_doctor,
+    "panic": cmd_panic,
+    "vpn": cmd_vpn,
 }
 
 

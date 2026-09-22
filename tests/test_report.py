@@ -26,6 +26,17 @@ def test_counts():
     assert _sample().counts()["warn"] == 1
 
 
+def test_score_grades_ok_and_warn_ignores_info():
+    # sample: 1 OK (1.0) + 1 WARN (0.3) + 1 INFO (ignored) -> 1.3/2 = 65
+    assert _sample().score() == 65
+
+
+def test_score_is_none_when_nothing_gradeable():
+    r = AuditReport(profile="x", generated_at="t",
+                    checks=[Check("a", "A", "c", Status.NA), Check("b", "B", "c", Status.INFO)])
+    assert r.score() is None
+
+
 def test_html_is_accessible_and_escaped():
     doc = render_html(_sample())
     # WCAG basics
