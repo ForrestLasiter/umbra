@@ -122,5 +122,5 @@ if TYPE_CHECKING:  # pragma: no cover
 # --- Engine-owned ordering (spec §3) -----------------------------------------
 # Raise the firewall/telemetry walls before opening the tunnel; touch radios
 # (which can drop connectivity) last. Restore reverses this.
-APPLY_ORDER: tuple[str, ...] = ("telemetry", "netdark", "tunnel", "rf")
+APPLY_ORDER: tuple[str, ...] = ("kernel", "telemetry", "netdark", "tunnel", "rf", "identity")
 RESTORE_ORDER: tuple[str, ...] = tuple(reversed(APPLY_ORDER))

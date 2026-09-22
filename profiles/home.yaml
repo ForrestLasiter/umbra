@@ -9,6 +9,13 @@ meta:
   fail_mode: open
   require_confirm: false
 modules:
+  kernel:
+    enabled: true
+    hardening_sysctls: true
+    disable_webcam: false          # home: leave the camera usable
+  identity:
+    enabled: true
+    dhcp_hostname_suppress: true   # stop leaking the hostname over DHCP
   rf:
     enabled: true
     mac_randomization: per-network

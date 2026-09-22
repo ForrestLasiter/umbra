@@ -27,6 +27,7 @@ RESTORE_PRIMITIVES: frozenset[str] = frozenset({
     "file_replace",
     "hosts_replace",
     "path_restore",
+    "module_load",
 })
 
 
@@ -55,6 +56,15 @@ def _rfkill_set(runner: Runner, prior: dict) -> None:
     identifier = prior["identifier"]        # e.g. "bluetooth", "wifi", "wwan"
     action = "block" if prior.get("was_blocked") else "unblock"
     runner.run(["rfkill", action, identifier], read_only=False, check=False)
+
+
+def _module_load(runner: Runner, prior: dict) -> None:
+    """Reload or unload a kernel module back to its prior loaded state."""
+    module = prior["module"]
+    if prior.get("was_loaded"):
+        runner.run(["modprobe", module], read_only=False, check=False)
+    else:
+        runner.run(["modprobe", "-r", module], read_only=False, check=False)
 
 
 def _systemd_unit(runner: Runner, prior: dict) -> None:
@@ -127,6 +137,7 @@ _DISPATCH = {
     "hosts_replace": _hosts_replace,
     "path_restore": _path_restore,
     "rfkill_set": _rfkill_set,
+    "module_load": _module_load,
     # nmcli MAC changes restore via file_replace of the NetworkManager drop-in,
     # so no dedicated nmcli_set primitive is needed yet.
     "nmcli_set": _not_yet("nmcli_set"),

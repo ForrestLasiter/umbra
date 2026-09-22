@@ -50,5 +50,5 @@ def test_live_mode_adds_an_accessible_refresh_link():
 def test_run_audit_returns_checks_without_error():
     # On any OS: probes must not throw; off-Linux they degrade to NA/INFO.
     report = run_audit(Runner(dry_run=False), load_profile("home"))
-    assert len(report.checks) == 8
+    assert len(report.checks) == 10
     assert all(isinstance(c.status, Status) for c in report.checks)

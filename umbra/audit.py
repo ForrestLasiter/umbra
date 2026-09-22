@@ -64,6 +64,8 @@ def run_audit(runner: Runner, profile: Profile) -> AuditReport:
         _probe_ipv6_privacy,
         _probe_mac,
         _probe_telemetry_sinkhole,
+        _probe_kernel_hardening,
+        _probe_hostname_leak,
     ):
         report.checks.append(probe(runner))
     return report
@@ -185,6 +187,32 @@ def _probe_mac(runner: Runner) -> Check:
     status = Status.OK if randomized else Status.WARN
     return Check("mac", "WiFi MAC randomization", "rf", status, "; ".join(details),
                  "" if randomized else "enable rf.mac to randomize the MAC")
+
+
+def _probe_kernel_hardening(runner: Runner) -> Check:
+    res = runner.run(["sysctl", "-n", "kernel.kptr_restrict"], read_only=True)
+    if not res.available:
+        return Check("kernel", "Kernel hardening", "hardening", Status.NA, "sysctl unavailable")
+    val = res.stdout.strip()
+    if val == "2":
+        return Check("kernel", "Kernel hardening", "hardening", Status.OK,
+                     "kptr_restrict=2 (kernel pointers hidden)")
+    return Check("kernel", "Kernel hardening", "hardening", Status.WARN,
+                 f"kptr_restrict={val or 'unset'}", "enable the kernel module")
+
+
+def _probe_hostname_leak(runner: Runner) -> Check:
+    nm = Path("/etc/NetworkManager")
+    conf = nm / "conf.d" / "01-umbra-hostname.conf"
+    if not nm.exists():
+        return Check("hostname", "DHCP hostname leak", "identity", Status.NA,
+                     "NetworkManager not present")
+    if conf.exists() and "dhcp-send-hostname=false" in conf.read_text():
+        return Check("hostname", "DHCP hostname leak", "identity", Status.OK,
+                     "hostname is not broadcast over DHCP")
+    return Check("hostname", "DHCP hostname leak", "identity", Status.INFO,
+                 "the hostname may be sent in DHCP requests (a cross-network identifier)",
+                 "enable the identity module to suppress it")
 
 
 def _probe_telemetry_sinkhole(runner: Runner) -> Check:

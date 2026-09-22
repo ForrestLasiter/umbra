@@ -23,6 +23,25 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "kernel": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "hardening_sysctls": { "type": "boolean" },
+            "disable_webcam": { "type": "boolean" }
+          }
+        },
+        "identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled"],
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "dhcp_hostname_suppress": { "type": "boolean" }
+          }
+        },
         "rf": {
           "type": "object",
           "additionalProperties": false,

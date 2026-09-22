@@ -12,6 +12,10 @@ meta:
   fail_mode: closed
   require_confirm: true
 modules:
+  kernel:
+    enabled: true
+    hardening_sysctls: true
+    disable_webcam: true    # go dark: unload the camera driver too
   rf:
     enabled: true
     mac_randomization: full
