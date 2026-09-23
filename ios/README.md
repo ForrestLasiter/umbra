@@ -7,10 +7,11 @@ The iOS adapter from the Umbra platform boundary
 iPhone honestly can — which, on iOS, is the least of the three platforms.
 
 > Status: **DNS telemetry sinkhole + WireGuard config import ported** from the
-> Android datapath (same algorithm). The `UmbraCore` Swift package **compiles and
-> tests in CI** (`swift test` on a macOS runner), so the datapath and config logic
-> are verified. The Packet Tunnel provider plumbing (and WireGuard/Tor forwarding)
-> is **device-test pending** — it needs an iOS runtime, not a CI host.
+> Android datapath (same algorithm). The whole target **compiles in CI**:
+> `UmbraCore` via `swift test` (datapath + config, with cross-language golden
+> vectors) and the full app + Packet Tunnel extension via `xcodebuild` (XcodeGen).
+> Only the live Packet Tunnel *runtime* (and WireGuard/Tor forwarding) is
+> **device-test pending** — it needs an iOS device, not a CI host.
 
 ## What the phone can enforce (and what it can't)
 

@@ -249,14 +249,14 @@ Thin front-ends over the same core, each enforcing what its OS honestly can:
 - [`ios/`](ios/) — Swift/Network Extension. DNS sinkhole ported (shared datapath),
   WireGuard config import ported; the tunnel plumbing is WireGuardKit/next.
 
-Both apps **compile and unit-test in CI** — `gradle :app:testDebugUnitTest`
-(Android) and `swift test` (iOS core) — so the datapath (IPv4/UDP/DNS parsing,
-checksums, blocklist), config import, tunnel-mode selection, and UI logic are
-verified, not just asserted. The no-root **DNS sinkhole** is one algorithm ported
-to Kotlin and Swift (also cross-checked against a Python mirror). Only the live
-native plumbing (VpnService `establish`, libwg-go handshake, Orbot launch, the iOS
-Packet Tunnel runtime) is **device-test pending** — it needs a real device, and
-the apps say so rather than claiming what isn't verified. See
+Every line of both apps **compiles in CI**: Android via `gradle
+:app:testDebugUnitTest` (whole app + unit tests), iOS via `swift test` (the core)
+and `xcodebuild` (the full app + Packet Tunnel extension). The no-root **DNS
+sinkhole** is one algorithm ported to Kotlin and Swift, and **golden vectors
+enforce byte-exact parity** with the Python reference across all three. Only the
+live native runtime (VpnService `establish`, libwg-go handshake, Orbot launch, the
+iOS Packet Tunnel) is **device-test pending** — it needs a real device, and the
+apps say so rather than claiming what isn't verified. See
 [`docs/phases/PHASE-17.md`](docs/phases/PHASE-17.md).
 
 ## Documentation
