@@ -6,12 +6,11 @@ The iOS adapter from the Umbra platform boundary
 [`spec/umbra-core.json`](../spec/umbra-core.json) and enforces only what a stock
 iPhone honestly can — which, on iOS, is the least of the three platforms.
 
-> Status: **DNS telemetry sinkhole implemented** (ported from the Android
-> datapath, sharing the same algorithm). The core (a Swift Package with tests),
-> the honest capability model, the SwiftUI front-end, and the Packet Tunnel
-> provider are in place. WireGuard/Tor forwarding is still `TODO`. The tunnel
-> plumbing is **device-test pending** (needs an iOS runtime); the datapath logic
-> it drives is unit-tested and Python-mirror verified.
+> Status: **DNS telemetry sinkhole + WireGuard config import ported** from the
+> Android datapath (same algorithm). The `UmbraCore` Swift package **compiles and
+> tests in CI** (`swift test` on a macOS runner), so the datapath and config logic
+> are verified. The Packet Tunnel provider plumbing (and WireGuard/Tor forwarding)
+> is **device-test pending** — it needs an iOS runtime, not a CI host.
 
 ## What the phone can enforce (and what it can't)
 

@@ -7,11 +7,12 @@ front-end over the platform-agnostic core**: it reads the same
 enforces what an unrooted phone honestly can — never pretending to match the
 Linux reference.
 
-> Status: **DNS telemetry sinkhole + WireGuard tunnel implemented**; Tor is still
-> a `TODO` seam. The honest capability model, the VPN lifecycle, the spec-driven
-> UI, the DNS datapath, and the WireGuard config import are unit-tested. The
-> WireGuard tunnel bring-up (native libwg-go) is written against the library's
-> public API and is **device-test pending** — it can't run on the build host.
+> Status: **DNS telemetry sinkhole + WireGuard + Tor (via Orbot)** wired. The whole
+> app **compiles and unit-tests in CI** (`gradle :app:testDebugUnitTest` on a
+> runner with the Android SDK), so the datapath, config, tunnel-mode, and UI logic
+> are verified. Only the live native tunnel bring-up (VpnService `establish`,
+> libwg-go handshake, Orbot launch) is **device-test pending** — it needs a real
+> device, not a CI host.
 
 ## What the phone can enforce (and what it can't)
 

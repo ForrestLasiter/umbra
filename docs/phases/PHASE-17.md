@@ -82,11 +82,13 @@ work instead of trusting a claim.
 
 ## 5. The device-test boundary (said plainly)
 
-The pure datapath logic is verified. The **native/library plumbing**
-(VpnService/Network-Extension bring-up, libwg-go, Orbot intents) is written to
-each platform's public API but **cannot run on the build host** — it's marked
-device-test-pending in the code and the READMEs. Umbra doesn't claim what it
-hasn't verified.
+Both apps now **compile and unit-test in CI** — `gradle :app:testDebugUnitTest`
+on a runner with the Android SDK, and `swift test` on the iOS core (macOS). So the
+whole Android app compiles and every pure-JVM/Swift test (datapath, config,
+tunnel-mode, UI logic) passes on every push. The remaining **native/library
+plumbing** (VpnService/Network-Extension bring-up, libwg-go handshake, Orbot
+launch) needs a real device — it's marked device-test-pending in the code and the
+READMEs. Umbra doesn't claim what it hasn't verified.
 
 ---
 
