@@ -5,6 +5,7 @@ engine/state/restore.log
 
 # Build artifacts
 dist/
+build/
 
 # Python
 __pycache__/

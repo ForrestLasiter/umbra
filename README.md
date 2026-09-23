@@ -17,58 +17,168 @@ exactly the way it was.
 > supply (a commercial VPN, a VPS you control) or Tor — never a home server, since
 > phoning home would tie the device's traffic back to your identity.
 
+> **Linux is the reference implementation.** The engine, profiles, and audit are
+> the product; the CLI is the primary interface. A phone app is the eventual goal,
+> with this Linux build as the setup and proving ground for the posture model. The
+> mobile boundary is explicit: anything that needs root nftables, NetworkManager,
+> or systemd here maps to the platform-native equivalent there, not a straight port.
+
 ## Status
 
-Phase 0 — specification and scaffold. Nothing here changes system state yet.
-Target platform: **Kali / Debian first**, architected to port later.
+**Working on Kali / Debian**, validated on a real Kali VM through Phase 15 plus a
+full security/reliability hardening pass. The reconciler, all posture modules, the
+crash-safe transaction store, the profile-aware audit, Tor transparent-proxy
+routing, polkit elevation, the system tray, the boot service, and the `.deb` /
+wheel packaging are all in place and tested. Architected to port to other
+platforms later; radios-off honesty is a design rule, not a TODO.
 
 ## What it does (by layer)
 
 | Layer | Controls |
 |---|---|
-| **RF signature** | Per-network MAC randomization, probe-request suppression, Bluetooth off/non-discoverable, radio kill |
-| **Local network dark** | `nftables` default-deny **DROP**, kill mDNS/LLMNR/NetBIOS/SSDP/WSD, IPv6 privacy, open-port audit |
-| **Internet / ISP** | WireGuard or Tor routing, egress **killswitch**, encrypted DNS, leak prevention |
-| **Telemetry** | Telemetry-domain blocklist, disable OS/app phone-home, egress allowlist |
+| **RF signature** | Per-network MAC randomization, probe-request suppression, Bluetooth off, radio kill (rfkill) |
+| **Local network dark** | `nftables` default-deny **DROP**, kill mDNS/LLMNR/NetBIOS/SSDP/WSD discovery, IPv6 privacy addresses, open-port audit |
+| **Internet / ISP** | WireGuard or **Tor transparent proxy** routing, egress **killswitch**, encrypted DNS, IPv6/DNS leak prevention |
+| **Telemetry** | Telemetry-domain sinkhole (hosts blocklist), disable OS/app phone-home services |
+| **OS hardening** | Kernel hardening sysctls, webcam disable, DHCP hostname suppression |
+
+Every control is *measured* before and *verified* after — the audit reports what
+is actually true on the wire, not what a profile claims.
 
 ## Posture profiles
 
 Declarative YAML. The engine diffs current state against the target and applies
-only what differs; every change is snapshotted first so it reverts cleanly.
+only what differs; every change is snapshotted first so it reverts cleanly. Each
+profile declares the capabilities it **requires**, and the audit only scores
+against those — a profile can't report 100/100 while a required control is
+unverified.
 
 - `normal` — restore to stock
-- `home` — sane hardening, usable on a trusted LAN
-- `travel` — hostile-network mode
-- `paranoid` — go dark
+- `home` — sane hardening, usable on a trusted LAN (firewall, IPv6 privacy, discovery off, telemetry sinkhole, kernel hardening, hostname + MAC randomization; Bluetooth stays on)
+- `travel` — hostile-network mode (home **+** Bluetooth off **+** WireGuard tunnel & killswitch)
+- `paranoid` — go dark (travel **+** Tor transparent proxy **+** webcam off)
+
+Profiles compose with `extends`, so `travel` and `paranoid` build on `home`
+rather than repeating it.
+
+## Commands
+
+`umbra <command>` — read-only commands need no privilege; mutating ones elevate
+via `sudo` or `--pkexec` (a desktop auth dialog).
+
+| Command | What it does |
+|---|---|
+| `umbra list` | list available profiles |
+| `umbra status [profile]` | measured posture vs a profile (default `home`); prints the compact banner |
+| `umbra plan <profile>` | show the exact actions `apply` would take — no mutation |
+| `umbra apply <profile>` | reconcile the machine to a profile (one crash-safe transaction) |
+| `umbra normal` | restore to stock (undo the active posture) |
+| `umbra restore [--tx ID]` | restore a specific transaction (default: the current one) |
+| `umbra audit [profile] [--html PATH]` | read-only **proof** of posture; optional accessible HTML dashboard |
+| `umbra dashboard [profile] [--port N]` | serve a live posture dashboard on `localhost` (default `:8799`) |
+| `umbra doctor [profile]` | check this machine has what a profile needs (nftables, tor, wireguard, …) |
+| `umbra panic` | go dark **now** — slam straight to the `paranoid` posture |
+| `umbra vpn <config> [--name NAME]` | import a WireGuard `.conf` for `tunnel(wireguard)` |
+| `umbra tray` | run the system-tray posture toggle (desktop) |
+
+**Global flags:** `--dry-run` (show mutations without doing them), `--json`
+(machine-readable output where supported), `--confirm` (acknowledge a
+`fail-mode=closed` apply), `--pkexec` (elevate through polkit), `--profiles-dir`
+(override — refused on the pkexec path), `--verbose`, `--version`.
+
+### Applying, undoing, and crash safety
+
+```bash
+umbra doctor travel          # is this machine ready?  (exit 1 if not)
+umbra plan travel            # what would change?
+sudo umbra apply travel      # do it — snapshots every change first
+umbra audit travel           # prove it: green/red per control, scored
+umbra normal                 # put everything back
+```
+
+Every `apply` is one transaction with a snapshot taken **before** each mutation.
+If a run crashes mid-apply, the next invocation detects the incomplete
+transaction and restores it before doing anything else. `open` profiles favour
+connectivity (a failure rolls the whole transaction back); `closed` profiles
+favour safety (the walls stay up, the transaction is marked failed, and `current`
+points at it so `umbra normal` / `umbra restore` can undo it). A posture that
+didn't verify is **never** recorded as active.
+
+### Tor transparent proxy (`paranoid`)
+
+`paranoid` routes all TCP through Tor via an nftables NAT redirect to `TransPort
+9040`, with DNS forced to Tor's `DNSPort 9053` (9053, not 5353 — that collides
+with mDNS) and a killswitch that drops anything that would bypass the tunnel.
+It drives `tor@default.service` (the real Debian unit, not the `tor.service`
+no-op wrapper) and forces a config reload so a Tor that was already running still
+picks up the transparent-proxy settings. `umbra audit paranoid` confirms
+`IsTor: true` end to end.
+
+### VPN import
+
+Bring your own endpoint — a commercial VPN or a VPS you control:
+
+```bash
+sudo umbra vpn ~/Downloads/mullvad-us.conf --name vpn
+sudo umbra apply travel        # travel/paranoid reference profile_ref "vpn"
+```
+
+The config is written to `/etc/wireguard/<name>.conf` at mode `0600`. Names are
+validated (no path traversal); `travel` and `paranoid` reference it by
+`profile_ref`, never a home server.
+
+## Elevation, tray, and boot
+
+- **polkit** — install registers action `com.forrestlasiter.umbra.run`
+  (`exec.path=/usr/bin/umbra`), so `umbra --pkexec apply travel` pops a desktop
+  auth dialog instead of needing a root shell. The elevated process constrains
+  itself to a safe set of built-in commands, refuses an attacker-chosen
+  `--profiles-dir`, and refuses `audit --html` (arbitrary root-owned write).
+- **system tray** — `umbra tray` gives a desktop toggle between postures over the
+  same engine the CLI uses.
+- **boot service** — `install.sh --with-boot-service` installs a `oneshot` systemd
+  unit that applies your chosen boot profile at every boot and reverts to `normal`
+  on stop.
+- **NetworkManager dispatcher** — re-asserts the active posture (MAC, hostname
+  suppression, firewall, killswitch) when a link comes up as you move between
+  networks. It's `flock`-serialized (no concurrent transactions), debounced (15s,
+  so an apply that nudges NetworkManager can't loop), and logs every reapply,
+  success or failure.
 
 ## Design non-negotiables
 
 1. **Reversibility first** — every module snapshots prior state before touching
-   anything; a crash mid-apply must still restore.
+   anything (mode, owner, group, and symlink metadata preserved; writes are
+   atomic: temp file + `fsync` + `os.replace`); a crash mid-apply must still
+   restore, and a `--dry-run` restore mutates nothing.
 2. **Idempotent modules** — re-applying a profile is a no-op.
-3. **Audit proves it** — a posture scanner + leak tests show green/red per
-   control; you see it, you don't trust a claim.
-4. **CLI before GUI** — the engine and `umbra` CLI are the product; any UI is a
-   thin client over them.
-
-See [`docs/PHASE-0-SPEC.md`](docs/PHASE-0-SPEC.md) for the full specification.
+3. **Audit proves it** — a profile-aware posture scanner + live leak probes
+   (listening ports, default route, DNS resolvers) show green/red per control;
+   you see it, you don't trust a claim.
+4. **CLI before GUI** — the engine and `umbra` CLI are the product; any UI (tray,
+   dashboard, future mobile app) is a thin client over them.
 
 ## Layout
 
 ```
 umbra/
-  docs/            specs (start here)
-  profiles/        posture definitions (YAML)
-  schema/          JSON Schema for profiles + state snapshots
+  docs/            specs + per-phase writeups (start here)
+  packaging/       polkit policy, systemd unit, NM dispatcher, .deb builder
   umbra/           the Python package (installable, entrypoint `umbra`)
-    engine.py      the reconciler
+    engine.py      the reconciler (measure→plan→apply→verify→restore)
     profiles.py    load + validate + merge posture YAML
+    profiles/      posture definitions (YAML, shipped as package data)
+    schema/        JSON Schema for profiles (shipped as package data)
     snapshots.py   crash-safe transactions
     restore.py     the audited restore primitives
-    runner.py      the one shim all external commands go through
-    modules/       rf, netdark, tunnel, telemetry (idempotent)
+    fsutil.py      snapshot / atomic-write / restore-path helpers
+    runner.py      the one shim all external commands go through (timeouts, clean env)
+    capabilities.py  maps profile "requires" tokens -> the controls that satisfy them
+    audit.py       profile-aware, scored posture proof
+    lock.py        flock apply-lock (one transaction at a time)
+    validate.py    name/path validation for privileged inputs
+    modules/       kernel, telemetry, netdark, tunnel, rf, identity (idempotent)
     cli.py         `umbra` entrypoint
-  engine/state/    runtime snapshots for clean revert (git-ignored)
   tests/           unit tests (run on any OS)
 ```
 
@@ -82,6 +192,13 @@ sudo ./install.sh --with-boot-service   # + apply a posture at every boot
 sudo ./uninstall.sh                     # restores posture, then removes
 ```
 
+**Debian package:**
+
+```bash
+packaging/build-deb.sh                  # builds umbra_<version>_all.deb
+sudo apt install ./umbra_*.deb          # deps + wrapper + polkit; prerm restores posture
+```
+
 **Dev:**
 
 ```bash
@@ -90,3 +207,11 @@ pip install -e ".[dev]"
 umbra --help
 pytest -q
 ```
+
+## Documentation
+
+- [`docs/PHASE-0-SPEC.md`](docs/PHASE-0-SPEC.md) — the full specification and
+  contracts every module implements.
+- [`docs/phases/`](docs/phases/) — per-phase writeups with diagrams.
+- [`docs/DEVELOPING.md`](docs/DEVELOPING.md) — how the pieces fit and how to work
+  on them.

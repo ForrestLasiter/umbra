@@ -425,6 +425,13 @@ def main(argv: list[str] | None = None) -> int:
             print("umbra: --profiles-dir is not permitted via pkexec (uses built-in profiles)",
                   file=sys.stderr)
             return 2
+        # `audit --html PATH` writes a file as root; an attacker-chosen PATH would
+        # be an arbitrary root-owned write. The dashboard is a convenience you can
+        # produce unprivileged, so forbid it on the elevated path entirely.
+        if getattr(args, "html", None):
+            print("umbra: --html is not permitted via pkexec; run 'umbra audit --html' directly",
+                  file=sys.stderr)
+            return 2
 
     runner = Runner(dry_run=args.dry_run)
     try:

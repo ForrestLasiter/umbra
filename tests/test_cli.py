@@ -66,3 +66,13 @@ def test_audit_html_writes_a_file(tmp_path):
     assert rc == 0
     assert out.exists()
     assert '<html lang="en">' in out.read_text(encoding="utf-8")
+
+
+def test_pkexec_refuses_audit_html(tmp_path, monkeypatch, capsys):
+    # Under pkexec, `audit --html PATH` is an arbitrary root-owned write -> refuse.
+    monkeypatch.setenv("PKEXEC_UID", "1000")
+    out = tmp_path / "evil.html"
+    rc = cli.main(["audit", "home", "--html", str(out)])
+    assert rc == 2
+    assert not out.exists()
+    assert "--html is not permitted via pkexec" in capsys.readouterr().err
