@@ -22,6 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.forrestlasiter.umbra.core.Enforcement
 import com.forrestlasiter.umbra.core.PlannedAction
 import com.forrestlasiter.umbra.core.PostureItem
+import com.forrestlasiter.umbra.tor.OrbotHelper
 import com.forrestlasiter.umbra.vpn.SinkholeStats
 import com.forrestlasiter.umbra.vpn.TunnelController
 
@@ -101,8 +102,15 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // WireGuard config: needed by tunnel postures. Bring your own endpoint.
-            val needsWg = state.plan?.items?.any {
+            // Tor postures (paranoid) route through Orbot. Show it first — it
+            // takes precedence over WireGuard for "go dark".
+            val needsTor = state.plan?.items?.any {
+                it.capability == "tor" && it.action == PlannedAction.NEEDS_TUNNEL
+            } == true
+            if (needsTor) OrbotCard()
+
+            // WireGuard config: needed by tunnel postures without Tor. BYO endpoint.
+            val needsWg = !needsTor && state.plan?.items?.any {
                 it.capability == "wireguard" && it.action == PlannedAction.REQUEST_CONSENT
             } == true
             if (needsWg) WgConfigCard(state, onImport = {
@@ -143,6 +151,29 @@ class MainActivity : ComponentActivity() {
         val error = tunnels.activate(state.selected, plan)
         if (error == null) { vm.setActive(true); vm.setMessage("Enforcing ${state.selected}.") }
         else vm.setMessage(error)
+    }
+
+    @Composable
+    private fun OrbotCard() {
+        val installed = OrbotHelper.isInstalled(this)
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Tor (via Orbot)", fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (installed) "Orbot is installed. Going dark starts it; Orbot's " +
+                        "VPN mode then routes all traffic over Tor."
+                    else "Tor on Android is provided by Orbot. Install it to route this " +
+                        "posture through Tor.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                if (!installed) {
+                    OutlinedButton(onClick = {
+                        runCatching { startActivity(OrbotHelper.installIntent()) }
+                            .onFailure { startActivity(OrbotHelper.installFallbackIntent()) }
+                    }) { Text("Install Orbot") }
+                }
+            }
+        }
     }
 
     @Composable
