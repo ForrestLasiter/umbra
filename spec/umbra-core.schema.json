@@ -8,6 +8,7 @@
     "enforcement_levels",
     "capabilities",
     "platforms",
+    "telemetry_blocklists",
     "profiles",
     "audit"
   ],
@@ -109,6 +110,15 @@
         }
       }
     },
+    "telemetry_blocklists": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
     "profiles": {
       "type": "object",
       "additionalProperties": {
@@ -125,6 +135,12 @@
             "type": "string"
           },
           "requires": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "telemetry_blocklists": {
             "type": "array",
             "items": {
               "type": "string"

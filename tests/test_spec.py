@@ -35,6 +35,18 @@ def test_spec_profiles_expose_required_capabilities():
     assert "firewall" in doc["profiles"]["home"]["requires"]
 
 
+def test_spec_ships_shared_telemetry_blocklists():
+    doc = spec.build_spec()
+    # The named lists are the single source of truth every platform sinkholes.
+    lists = doc["telemetry_blocklists"]
+    assert "os" in lists and "common-trackers" in lists
+    assert any("google-analytics" in d for d in lists["common-trackers"])
+    # home selects both lists; the app unions them into its DNS filter.
+    assert doc["profiles"]["home"]["telemetry_blocklists"] == ["os", "common-trackers"]
+    # a profile that doesn't sinkhole telemetry exposes an empty selection
+    assert doc["profiles"]["normal"]["telemetry_blocklists"] == []
+
+
 def test_enforcement_levels_are_complete_and_described():
     doc = spec.build_spec()
     names = {lvl["name"] for lvl in doc["enforcement_levels"]}

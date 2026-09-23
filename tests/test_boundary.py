@@ -29,7 +29,7 @@ PKG = Path(__file__).resolve().parent.parent / "umbra"
 # enforcement matrix, the spec export, and HTML rendering. (base.py + runner.py
 # are shared infrastructure the model references and are allowed.)
 CORE = ["profiles", "capabilities", "platform", "spec", "report", "auditmodel",
-        "model", "validate", "paths"]
+        "model", "blocklists", "validate", "paths"]
 
 # The Linux agent: everything that measures or mutates the machine. The core must
 # never import any of these.

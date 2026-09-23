@@ -19,6 +19,7 @@ import json
 from pathlib import Path
 
 from umbra import __version__
+from umbra.blocklists import TELEMETRY_BLOCKLISTS
 from umbra.capabilities import CAPABILITY_CONTROLS
 from umbra.platform import CAPABILITY_SUPPORT, Enforcement, Platform
 from umbra.profiles import list_profiles, load_profile
@@ -81,10 +82,15 @@ def build_spec() -> dict:
     profiles = {}
     for name in list_profiles():
         prof = load_profile(name)
+        # Which telemetry blocklists this profile sinkholes (the adapters union
+        # these into a DNS filter; the Linux agent writes them to /etc/hosts).
+        tele = prof.data.get("modules", {}).get("telemetry", {})
+        tele_lists = tele.get("blocklists", []) if tele.get("enabled") else []
         profiles[name] = {
             "description": prof.data.get("description", ""),
             "fail_mode": prof.fail_mode,
             "requires": prof.requires,
+            "telemetry_blocklists": list(tele_lists),
             "modules": prof.data.get("modules", {}),
         }
 
@@ -97,6 +103,8 @@ def build_spec() -> dict:
         ],
         "capabilities": capabilities,
         "platforms": platforms,
+        "telemetry_blocklists": {name: list(domains)
+                                 for name, domains in sorted(TELEMETRY_BLOCKLISTS.items())},
         "profiles": profiles,
         "audit": {
             "status_values": ["ok", "warn", "fail", "info", "na"],
@@ -114,7 +122,7 @@ def build_schema() -> dict:
         "title": "Umbra core spec",
         "type": "object",
         "required": ["umbra_spec_version", "engine_version", "enforcement_levels",
-                     "capabilities", "platforms", "profiles", "audit"],
+                     "capabilities", "platforms", "telemetry_blocklists", "profiles", "audit"],
         "properties": {
             "umbra_spec_version": {"type": "string"},
             "engine_version": {"type": "string"},
@@ -162,6 +170,10 @@ def build_schema() -> dict:
                     },
                 },
             },
+            "telemetry_blocklists": {
+                "type": "object",
+                "additionalProperties": {"type": "array", "items": {"type": "string"}},
+            },
             "profiles": {
                 "type": "object",
                 "additionalProperties": {
@@ -171,6 +183,7 @@ def build_schema() -> dict:
                         "description": {"type": "string"},
                         "fail_mode": {"type": "string"},
                         "requires": {"type": "array", "items": {"type": "string"}},
+                        "telemetry_blocklists": {"type": "array", "items": {"type": "string"}},
                         "modules": {"type": "object"},
                     },
                 },

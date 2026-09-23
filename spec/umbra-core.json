@@ -251,6 +251,18 @@
       }
     }
   },
+  "telemetry_blocklists": {
+    "common-trackers": [
+      "www.google-analytics.com",
+      "analytics.google.com",
+      "app-measurement.com",
+      "graph.facebook.com"
+    ],
+    "os": [
+      "incoming.telemetry.mozilla.org",
+      "metrics.mozilla.org"
+    ]
+  },
   "profiles": {
     "home": {
       "description": "Sane hardening for a trusted LAN. Blocks telemetry and local discovery, raises a stealth firewall, and randomizes the MAC per network \u00e2\u20ac\u201d while staying usable (no killswitch, no radios off).\n",
@@ -263,6 +275,10 @@
         "kernel",
         "hostname",
         "mac"
+      ],
+      "telemetry_blocklists": [
+        "os",
+        "common-trackers"
       ],
       "modules": {
         "kernel": {
@@ -315,6 +331,7 @@
       "description": "Baseline. Every control off / asserting nothing. Applying this profile is the supported way to \"return the machine to stock\" \u00e2\u20ac\u201d it restores the snapshots of whatever the previously active profile changed.\n",
       "fail_mode": "open",
       "requires": [],
+      "telemetry_blocklists": [],
       "modules": {
         "rf": {
           "enabled": false
@@ -344,6 +361,10 @@
         "bluetooth_off",
         "webcam_off",
         "tor"
+      ],
+      "telemetry_blocklists": [
+        "os",
+        "common-trackers"
       ],
       "modules": {
         "kernel": {
@@ -412,6 +433,10 @@
         "mac",
         "bluetooth_off",
         "wireguard"
+      ],
+      "telemetry_blocklists": [
+        "os",
+        "common-trackers"
       ],
       "modules": {
         "kernel": {

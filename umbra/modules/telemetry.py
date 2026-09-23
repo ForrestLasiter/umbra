@@ -20,26 +20,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from umbra import fsutil
+from umbra.blocklists import TELEMETRY_BLOCKLISTS
 from umbra.modules.base import Action, Compliance, Control, Module, VerifyResult
 
 _HOSTS = Path("/etc/hosts")
 _BEGIN = "# >>> umbra telemetry sinkhole >>>"
 _END = "# <<< umbra telemetry sinkhole <<<"
-
-# Curated, legible starter lists. Swap for a fetched public blocklist later.
-_BLOCKLISTS: dict[str, list[str]] = {
-    "os": [
-        # Common OS/vendor telemetry endpoints (illustrative, edit freely).
-        "incoming.telemetry.mozilla.org",
-        "metrics.mozilla.org",
-    ],
-    "common-trackers": [
-        "www.google-analytics.com",
-        "analytics.google.com",
-        "app-measurement.com",
-        "graph.facebook.com",
-    ],
-}
 
 # Telemetry-ish systemd units we disable when present. Deliberately conservative.
 _TELEMETRY_UNITS = [
@@ -60,10 +46,8 @@ class TelemetryModule(Module):
     # --- helpers -------------------------------------------------------------
 
     def _wanted_domains(self) -> list[str]:
-        domains: list[str] = []
-        for name in self.config.get("blocklists", []):
-            domains.extend(_BLOCKLISTS.get(name, []))
-        return sorted(set(domains))
+        from umbra.blocklists import domains_for
+        return domains_for(self.config.get("blocklists", []))
 
     def _sinkhole_block(self) -> str:
         lines = [_BEGIN]
