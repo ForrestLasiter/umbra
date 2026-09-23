@@ -71,3 +71,15 @@ jobs:
           sudo apt-get install -y libxml2-utils
           xmllint --noout packaging/com.forrestlasiter.umbra.policy
           grep -q "com.forrestlasiter.umbra.run" packaging/com.forrestlasiter.umbra.policy
+
+  ios-core:
+    # The iOS core is a pure Swift package (Foundation only, no Network Extension),
+    # so `swift test` compiles it and runs the shared datapath tests -- the same
+    # DNS-sinkhole / WireGuard-config logic the app ships. Turns the Swift port
+    # from "device-test pending" into CI-verified.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: swift test (UmbraCore)
+        working-directory: ios/UmbraCore
+        run: swift test
