@@ -84,6 +84,27 @@ jobs:
         working-directory: ios/UmbraCore
         run: swift test
 
+  ios-app:
+    # Compile the full iOS app + Packet Tunnel extension (ContentView, the
+    # provider, UDPForwarder) -- the pieces swift test can't reach. Generates the
+    # Xcode project with XcodeGen and builds for the simulator, no signing.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        working-directory: ios
+        run: xcodegen generate
+      - name: Build (no signing)
+        working-directory: ios
+        run: |
+          xcodebuild build \
+            -project Umbra.xcodeproj \
+            -scheme Umbra \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
   android:
     # `:app:testDebugUnitTest` compiles ALL the app's Kotlin (main + test) and runs
     # the pure-JVM tests (posture engine, DNS datapath, WireGuard config, tunnel
