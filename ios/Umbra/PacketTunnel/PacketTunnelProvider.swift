@@ -20,6 +20,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     private let tunDNS = "10.111.0.1"
     private let forwarder = UDPForwarder()
     private var blocklist = TelemetryBlocklist([])
+    private let stats = SinkholeStats.shared()
 
     override func startTunnel(options: [String: NSObject]?,
                               completionHandler: @escaping (Error?) -> Void) {
@@ -28,6 +29,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             blocklist = TelemetryBlocklist(spec: spec, profile: profile)
             NSLog("Umbra: DNS sinkhole up for '\(profile)' — \(blocklist.count) domains")
         }
+        stats?.started(domains: blocklist.count)
 
         // DNS-only capture: route just our resolver, and make it the system DNS.
         let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: tunDNS)
@@ -59,6 +61,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
         // Blocked telemetry -> answer locally (pure decision, shared with tests).
         if let reply = DnsSinkhole.reply(for: packet, length: packet.count, blocklist: blocklist) {
             write(reply)
+            stats?.recordBlocked()
             return
         }
         // Otherwise forward the DNS query upstream and relay the reply.
@@ -70,6 +73,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
             let out = IPv4Packet.buildUDP(src: ip.dstAddr, dst: ip.srcAddr,
                                           srcPort: udp.dstPort, dstPort: udp.srcPort, payload: reply)
             self?.write(out)
+            self?.stats?.recordForwarded()
         }
     }
 
@@ -79,6 +83,7 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
 
     override func stopTunnel(with reason: NEProviderStopReason,
                              completionHandler: @escaping () -> Void) {
+        stats?.stopped()
         completionHandler()
     }
 }

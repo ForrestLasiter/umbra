@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import UmbraCore
 
@@ -7,6 +8,9 @@ struct ContentView: View {
     @State private var spec: CoreSpec?
     @State private var selected = "travel"
     @State private var error: String?
+    @State private var stats: SinkholeStats.Snapshot?
+
+    private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var profileNames: [String] {
         (spec?.profiles.keys.filter { $0 != "normal" } ?? []).sorted()
@@ -29,6 +33,7 @@ struct ContentView: View {
             .navigationTitle("Umbra")
         }
         .onAppear(perform: load)
+        .onReceive(tick) { _ in stats = SinkholeStats.shared()?.snapshot() }
     }
 
     private var content: some View {
@@ -43,6 +48,14 @@ struct ContentView: View {
                      + "Extension and tells you the rest — it does not pretend to "
                      + "be the Linux build.")
                     .font(.footnote).foregroundStyle(.secondary)
+            }
+
+            if let stats, stats.active {
+                Section("DNS sinkhole") {
+                    Text("\(stats.blocked) blocked · \(stats.forwarded) forwarded · "
+                         + "\(stats.domains) domains")
+                        .font(.footnote).monospacedDigit()
+                }
             }
 
             if let plan {
