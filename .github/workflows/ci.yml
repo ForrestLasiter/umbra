@@ -83,3 +83,23 @@ jobs:
       - name: swift test (UmbraCore)
         working-directory: ios/UmbraCore
         run: swift test
+
+  android:
+    # `:app:testDebugUnitTest` compiles ALL the app's Kotlin (main + test) and runs
+    # the pure-JVM tests (posture engine, DNS datapath, WireGuard config, tunnel
+    # mode). A green run means the whole Android app compiles -- the native tunnel
+    # bring-up still needs a device, but nothing else is unverified.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Unit tests
+        working-directory: android
+        run: gradle :app:testDebugUnitTest --no-daemon --stacktrace
