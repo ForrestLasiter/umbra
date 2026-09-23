@@ -10,51 +10,17 @@ actually verified.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
 from pathlib import Path
 
 from umbra import capabilities
+# The audit MODEL is core (auditmodel.py); this file adds the Linux PROBES.
+from umbra.auditmodel import AuditReport, Check, Status
 from umbra.modules.base import Compliance
 from umbra.profiles import Profile
 from umbra.runner import Runner
 
-
-class Status(str, Enum):
-    OK = "ok"
-    WARN = "warn"
-    FAIL = "fail"
-    INFO = "info"
-    NA = "na"
-
-
-@dataclass
-class Check:
-    id: str
-    title: str
-    category: str
-    status: Status
-    evidence: str = ""
-    recommendation: str = ""
-
-
-@dataclass
-class AuditReport:
-    profile: str
-    generated_at: str
-    checks: list[Check] = field(default_factory=list)
-    required: list = field(default_factory=list)   # list[capabilities.CapResult]
-
-    def counts(self) -> dict[str, int]:
-        out = {s.value: 0 for s in Status}
-        for c in self.checks:
-            out[c.status.value] += 1
-        return out
-
-    def score(self) -> int | None:
-        """0-100 over the profile's REQUIRED capabilities (None if none gradeable)."""
-        return capabilities.score(self.required)
+__all__ = ["AuditReport", "Check", "Status", "run_audit"]
 
 
 _COMPLIANCE_TO_STATUS = {

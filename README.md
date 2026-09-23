@@ -166,19 +166,29 @@ validated (no path traversal); `travel` and `paranoid` reference it by
 umbra/
   docs/            specs + per-phase writeups (start here)
   packaging/       polkit policy, systemd unit, NM dispatcher, .deb builder
+  spec/            umbra-core.json (+ schema) — the language-neutral contract
+  scripts/         sync-spec.sh (fan the core spec out to the adapters)
+  android/         umbra-android — VPNService adapter (Kotlin, scaffold)
+  ios/             umbra-ios — Network Extension adapter (Swift, scaffold)
   umbra/           the Python package (installable, entrypoint `umbra`)
-    engine.py      the reconciler (measure→plan→apply→verify→restore)
+    # --- core (platform-agnostic; provably no Linux imports, see tests/test_boundary.py) ---
+    model.py       posture model types (Compliance, Control, Action, ...)
     profiles.py    load + validate + merge posture YAML
     profiles/      posture definitions (YAML, shipped as package data)
     schema/        JSON Schema for profiles (shipped as package data)
+    capabilities.py  maps profile "requires" tokens -> the controls that satisfy them
+    platform.py    the honest per-platform enforcement matrix
+    auditmodel.py  the audit data model (Status/Check/AuditReport)
+    report.py      the accessible HTML dashboard renderer
+    spec.py        export the language-neutral core (umbra export-spec)
+    # --- Linux agent (measures + mutates the machine) ---
+    engine.py      the reconciler (measure→plan→apply→verify→restore)
     snapshots.py   crash-safe transactions
     restore.py     the audited restore primitives
     fsutil.py      snapshot / atomic-write / restore-path helpers
     runner.py      the one shim all external commands go through (timeouts, clean env)
-    capabilities.py  maps profile "requires" tokens -> the controls that satisfy them
-    audit.py       profile-aware, scored posture proof
+    audit.py       the Linux posture probes (fills in the audit model)
     lock.py        flock apply-lock (one transaction at a time)
-    validate.py    name/path validation for privileged inputs
     modules/       kernel, telemetry, netdark, tunnel, rf, identity (idempotent)
     cli.py         `umbra` entrypoint
   tests/           unit tests (run on any OS)

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import html
 
-from umbra.audit import AuditReport, Status
+from umbra.auditmodel import AuditReport, Status
 
 # Icon + accessible word for each status. The word means the colour is never the
 # only signal (SC 1.4.1).

@@ -12,50 +12,14 @@ See docs/PHASE-0-SPEC.md §3 (interface) and §4 (snapshot/restore).
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from enum import Enum
 
+# The pure posture-model types live in umbra.model (core, no Runner). Re-exported
+# here so `from umbra.modules.base import Compliance, Control, ...` keeps working.
+from umbra.model import Action, Compliance, Control, ControlState, VerifyResult
 from umbra.runner import Runner
 
-
-class Compliance(str, Enum):
-    """How a control's measured reality relates to the desired target."""
-    COMPLIANT = "compliant"      # already matches the target
-    DRIFT = "drift"             # differs; an action is needed
-    UNKNOWN = "unknown"         # could not measure (missing tool / no permission)
-    UNSUPPORTED = "unsupported"  # not applicable on this host
-
-
-@dataclass(frozen=True)
-class Control:
-    """One atomic, reversible change owned by a module."""
-    id: str                      # e.g. "netdark.inbound_policy"
-    summary: str                 # shown in `umbra status`
-    restore_method: str          # one of restore.RESTORE_PRIMITIVES
-
-
-@dataclass
-class ControlState:
-    """What measure() found for one control right now."""
-    control: str
-    compliance: Compliance
-    observed: dict = field(default_factory=dict)
-    detail: str = ""
-
-
-@dataclass
-class Action:
-    """A single planned change: bring `control` to `target`."""
-    control: str
-    target: dict
-    reason: str = ""
-
-
-@dataclass
-class VerifyResult:
-    control: str
-    ok: bool
-    detail: str = ""
+__all__ = ["Action", "Compliance", "Control", "ControlState", "VerifyResult",
+           "Module", "APPLY_ORDER", "RESTORE_ORDER"]
 
 
 class Module(ABC):

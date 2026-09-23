@@ -34,11 +34,19 @@ promise, how the audit scores it, and — new in this phase — **what each plat
 can honestly enforce**. It has no Linux imports. Everything platform-specific is
 an *agent* (Linux) or an *adapter* (Android/iOS) hanging off the core.
 
-The Linux code already respected most of this line: `profiles.py`,
-`capabilities.py`, the audit *model*, and the posture types in `modules/base.py`
-never touch the system. The Linux-ness lives in the module *implementations*,
-`runner.py`, the snapshot/restore machinery, and the CLI/tray. Phase 16 makes the
-boundary explicit rather than incidental.
+The Linux code already respected most of this line, and Phase 16 makes it
+**enforced, not incidental**. The pure posture types moved to `umbra/model.py`
+and the audit model to `umbra/auditmodel.py`, so the core
+(`model`, `profiles`, `capabilities`, `platform`, `auditmodel`, `report`, `spec`)
+imports nothing from the Linux agent (`engine`, `snapshots`, `restore`, the
+concrete `modules/*`, `cli`, …). [`tests/test_boundary.py`](../../tests/test_boundary.py)
+proves it two ways: importing the core in a fresh interpreter pulls in **zero**
+enforcement modules, and no core module may `import` an agent module. Cross the
+line and the build goes red.
+
+The adapters live beside the core as [`android/`](../../android/) (Kotlin,
+VPNService) and [`ios/`](../../ios/) (Swift, Network Extension) — thin front-ends
+that read the exported spec.
 
 ## 2. The honest part — enforcement levels
 

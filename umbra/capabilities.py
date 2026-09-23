@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from umbra.modules.base import Compliance
+from umbra.model import Compliance
 
 # capability token -> control-id patterns ('*' suffix = prefix match).
 CAPABILITY_CONTROLS: dict[str, tuple[str, ...]] = {
