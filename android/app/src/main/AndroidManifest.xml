@@ -38,5 +38,21 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Routes device traffic through the selected Umbra privacy posture." />
         </service>
+
+        <!-- The WireGuard userspace backend's own VpnService (libwg-go). Used for
+             tunnel postures (travel/paranoid); one app-level VPN consent covers
+             both this and UmbraVpnService. -->
+        <service
+            android:name="com.wireguard.android.backend.GoBackend$VpnService"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:foregroundServiceType="specialUse"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="WireGuard tunnel for the selected Umbra posture." />
+        </service>
     </application>
 </manifest>

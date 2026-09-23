@@ -22,11 +22,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.forrestlasiter.umbra.core.Enforcement
 import com.forrestlasiter.umbra.core.PlannedAction
 import com.forrestlasiter.umbra.core.PostureItem
-import com.forrestlasiter.umbra.vpn.UmbraVpnService
+import com.forrestlasiter.umbra.vpn.TunnelController
 
 class MainActivity : ComponentActivity() {
 
     private val vm: PostureViewModel by viewModels()
+    private val tunnels by lazy { TunnelController(applicationContext) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,23 +43,36 @@ class MainActivity : ComponentActivity() {
     private fun PostureScreen(vm: PostureViewModel) {
         val state by vm.state.collectAsStateWithLifecycle()
 
-        // VPN consent: the OS asks the user once; only then may we start the tunnel.
+        // Pick a WireGuard .conf and import it.
+        val pickConfig = rememberLauncherForActivityResult(
+            ActivityResultContracts.OpenDocument()
+        ) { uri ->
+            if (uri != null) {
+                val text = runCatching {
+                    contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                }.getOrNull()
+                if (text != null) vm.importWgConfig(text)
+                else vm.setMessage("Could not read the selected file.")
+            }
+        }
+
+        // VPN consent: one grant covers both the sinkhole and the WireGuard tunnel.
         val consent = rememberLauncherForActivityResult(
             ActivityResultContracts.StartActivityForResult()
         ) { result ->
-            if (result.resultCode == Activity.RESULT_OK) {
-                UmbraVpnService.start(this, state.selected)
-                vm.setActive(true)
-            }
+            if (result.resultCode == Activity.RESULT_OK) startEnforcement(state)
+            else vm.setMessage("VPN permission is required to enforce this posture.")
         }
 
         fun activate() {
             val prepare: Intent? = VpnService.prepare(this)
-            if (prepare != null) consent.launch(prepare)
-            else { UmbraVpnService.start(this, state.selected); vm.setActive(true) }
+            if (prepare != null) consent.launch(prepare) else startEnforcement(state)
         }
 
-        fun deactivate() { UmbraVpnService.stop(this); vm.setActive(false) }
+        fun deactivate() {
+            state.plan?.let { tunnels.deactivate(it) }
+            vm.setActive(false)
+        }
 
         Column(
             Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
@@ -76,7 +90,6 @@ class MainActivity : ComponentActivity() {
                 return@Column
             }
 
-            // Profile picker
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 state.profileNames.forEachIndexed { i, name ->
                     SegmentedButton(
@@ -87,17 +100,52 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // Activate / deactivate
+            // WireGuard config: needed by tunnel postures. Bring your own endpoint.
+            val needsWg = state.plan?.items?.any {
+                it.capability == "wireguard" && it.action == PlannedAction.REQUEST_CONSENT
+            } == true
+            if (needsWg) WgConfigCard(state, onImport = {
+                pickConfig.launch(arrayOf("*/*"))       // .conf has no registered MIME type
+            })
+
             Button(
                 onClick = { if (state.active) deactivate() else activate() },
                 modifier = Modifier.fillMaxWidth()
             ) { Text(if (state.active) "Deactivate" else "Go dark: ${state.selected}") }
 
+            state.message?.let {
+                Card { Text(it, Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall) }
+            }
+
             HorizontalDivider()
             Text("What ${state.selected} means on this device",
                 style = MaterialTheme.typography.titleMedium)
-
             state.plan?.items?.forEach { CapabilityRow(it) }
+        }
+    }
+
+    private fun startEnforcement(state: PostureUiState) {
+        val plan = state.plan ?: return
+        val error = tunnels.activate(state.selected, plan)
+        if (error == null) { vm.setActive(true); vm.setMessage("Enforcing ${state.selected}.") }
+        else vm.setMessage(error)
+    }
+
+    @Composable
+    private fun WgConfigCard(state: PostureUiState, onImport: () -> Unit) {
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("WireGuard tunnel", fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (state.wgConfigured) "Config imported — endpoint ${state.wgEndpoint}"
+                    else "This posture tunnels all traffic. Import a WireGuard .conf " +
+                        "(a commercial VPN or a VPS you control).",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                OutlinedButton(onClick = onImport) {
+                    Text(if (state.wgConfigured) "Replace config" else "Import WireGuard config")
+                }
+            }
         }
     }
 
@@ -121,7 +169,6 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun EnforcementBadge(item: PostureItem) {
-        // Text label, never colour alone (accessibility) — and never a fake "on".
         val label = when (item.action) {
             PlannedAction.ENFORCE -> "enforced"
             PlannedAction.REQUEST_CONSENT -> "on consent"
