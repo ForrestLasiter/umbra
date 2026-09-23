@@ -36,7 +36,8 @@ ios/
   UmbraCore/                     Swift Package — pure logic, `swift test`-able
     Sources/UmbraCore/           Spec.swift, PostureEngine.swift
     Sources/UmbraCore/Net/       InternetChecksum, IPv4Packet, DnsMessage, TelemetryBlocklist
-    Tests/UmbraCoreTests/        PostureEngineTests.swift, NetTests.swift
+    Sources/UmbraCore/WireGuard/ WgConfig (import validator, mirrors Android)
+    Tests/UmbraCoreTests/        PostureEngineTests, NetTests, WgConfigTests
   Umbra/
     App/                         UmbraApp.swift, ContentView.swift, Umbra.entitlements
     PacketTunnel/                PacketTunnelProvider.swift, UDPForwarder.swift (+ entitlements)
@@ -73,8 +74,9 @@ scripts/sync-spec.sh
 
 1. ~~**DNS sinkhole**~~ — **done** (device-test pending). In-tunnel DNS filter
    sharing the Android datapath's algorithm.
-2. **WireGuard** — `NEPacketTunnelProvider` + WireGuardKit for the `travel` tunnel
-   (config import mirrors the Android `wg/` layer).
+2. **WireGuard** — config import/validation is **ported** (`UmbraCore/WireGuard/
+   WgConfig`, unit-tested); the tunnel itself needs `NEPacketTunnelProvider` +
+   WireGuardKit for `travel`.
 3. **Tor** — route the packet tunnel through Tor (Tor.framework) for `paranoid`.
 4. **Advisory deep-links** — link each `advisory` row to the matching iOS Settings
    URL (Wi-Fi, Bluetooth, Private DNS).
