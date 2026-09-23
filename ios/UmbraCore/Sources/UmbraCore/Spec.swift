@@ -57,11 +57,21 @@ public struct ProfileSpec: Codable {
     public let description: String
     public let failMode: String
     public let requires: [String]
+    public let telemetryBlocklists: [String]
 
     enum CodingKeys: String, CodingKey {
         case description
         case failMode = "fail_mode"
         case requires
+        case telemetryBlocklists = "telemetry_blocklists"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        description = try c.decodeIfPresent(String.self, forKey: .description) ?? ""
+        failMode = try c.decodeIfPresent(String.self, forKey: .failMode) ?? "closed"
+        requires = try c.decodeIfPresent([String].self, forKey: .requires) ?? []
+        telemetryBlocklists = try c.decodeIfPresent([String].self, forKey: .telemetryBlocklists) ?? []
     }
 }
 
@@ -71,6 +81,7 @@ public struct CoreSpec: Codable {
     public let enforcementLevels: [EnforcementLevel]
     public let capabilities: [String: Capability]
     public let platforms: [String: PlatformSpec]
+    public let telemetryBlocklists: [String: [String]]
     public let profiles: [String: ProfileSpec]
 
     enum CodingKeys: String, CodingKey {
@@ -78,12 +89,30 @@ public struct CoreSpec: Codable {
         case engineVersion = "engine_version"
         case enforcementLevels = "enforcement_levels"
         case capabilities, platforms, profiles
+        case telemetryBlocklists = "telemetry_blocklists"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        specVersion = try c.decode(String.self, forKey: .specVersion)
+        engineVersion = try c.decode(String.self, forKey: .engineVersion)
+        enforcementLevels = try c.decodeIfPresent([EnforcementLevel].self, forKey: .enforcementLevels) ?? []
+        capabilities = try c.decodeIfPresent([String: Capability].self, forKey: .capabilities) ?? [:]
+        platforms = try c.decodeIfPresent([String: PlatformSpec].self, forKey: .platforms) ?? [:]
+        telemetryBlocklists = try c.decodeIfPresent([String: [String]].self, forKey: .telemetryBlocklists) ?? [:]
+        profiles = try c.decodeIfPresent([String: ProfileSpec].self, forKey: .profiles) ?? [:]
     }
 
     /// The enforcement level THIS platform (ios) can promise for a capability.
     public func support(_ capability: String, platform: String = "ios") -> PlatformCapability {
         platforms[platform]?.capabilities[capability]
             ?? PlatformCapability(level: "unavailable", reason: "capability not in spec")
+    }
+
+    /// The de-duplicated union of telemetry domains a profile sinkholes.
+    public func telemetryDomains(_ profileName: String) -> Set<String> {
+        let lists = profiles[profileName]?.telemetryBlocklists ?? []
+        return Set(lists.flatMap { telemetryBlocklists[$0] ?? [] })
     }
 
     public static func parse(_ data: Data) throws -> CoreSpec {

@@ -1,56 +1,78 @@
 import NetworkExtension
 import UmbraCore
 
-/// The iOS enforcement path. A Packet Tunnel Provider is how a sandboxed iPhone
-/// enforces anything on the wire: it captures egress and can filter DNS (telemetry
-/// sinkhole) or forward through WireGuard / Tor. It runs in its own process with
-/// the Network Extension entitlement, started by the app via NETunnelProviderManager.
+/// The iOS enforcement path. Like the Android VPNService, this delivers the
+/// `telemetry` capability with a DNS-only tunnel: only the tunnel's DNS server is
+/// routed in, so every lookup arrives here to be sinkholed or forwarded, while
+/// all other traffic flows normally.
 ///
-/// Like the Android VPNService, capabilities the matrix marks advisory/unavailable
-/// are NOT touched here — the UI reports them honestly instead.
+///   - blocked telemetry domain -> answered locally 0.0.0.0 / :: (like the Linux
+///                                 /etc/hosts sinkhole);
+///   - everything else          -> forwarded to a real upstream and relayed.
 ///
-/// The datapath below is a scaffold: it establishes the tunnel settings and owns
-/// the lifecycle. Wiring the real DNS/packet processing (and a WireGuard/Tor
-/// backend) is the next implementation step, marked TODO.
+/// The pure parsing/sinkhole logic is UmbraCore (shared with the app, unit-tested
+/// + Python-mirror verified). WireGuard/Tor (full capture) remain future work.
+///
+/// DEVICE-TEST PENDING: the tunnel plumbing needs a real iOS runtime; the datapath
+/// logic it drives is verified.
 class PacketTunnelProvider: NEPacketTunnelProvider {
+
+    private let tunDNS = "10.111.0.1"
+    private let forwarder = UDPForwarder()
+    private var blocklist = TelemetryBlocklist([])
 
     override func startTunnel(options: [String: NSObject]?,
                               completionHandler: @escaping (Error?) -> Void) {
-        let profile = (options?["profile"] as? String) ?? "travel"
-
-        // Decide, from the shared core, what this posture enforces on iOS.
+        let profile = (options?["profile"] as? String) ?? "home"
         if let spec = try? CoreSpec.loadBundled(from: Bundle(for: Self.self)) {
-            let plan = PostureEngine.plan(spec: spec, profile: profile)
-            NSLog("Umbra: tunnel up for '\(profile)'; enforceable=\(plan.enforceable.map { $0.capability })")
+            blocklist = TelemetryBlocklist(spec: spec, profile: profile)
+            NSLog("Umbra: DNS sinkhole up for '\(profile)' — \(blocklist.count) domains")
         }
 
-        let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "127.0.0.1")
+        // DNS-only capture: route just our resolver, and make it the system DNS.
+        let settings = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: tunDNS)
         let ipv4 = NEIPv4Settings(addresses: ["10.111.0.2"], subnetMasks: ["255.255.255.255"])
-        ipv4.includedRoutes = [NEIPv4Route.default()]   // capture all IPv4
+        ipv4.includedRoutes = [NEIPv4Route(destinationAddress: tunDNS, subnetMask: "255.255.255.255")]
         settings.ipv4Settings = ipv4
-        let ipv6 = NEIPv6Settings(addresses: ["fd00:1111::2"], networkPrefixLengths: [64])
-        ipv6.includedRoutes = [NEIPv6Route.default()]   // ...and IPv6, no leak-around
-        settings.ipv6Settings = ipv6
-        // DNS handled inside the tunnel so telemetry lookups can be sinkholed.
-        settings.dnsSettings = NEDNSSettings(servers: ["10.111.0.1"])
+        let dns = NEDNSSettings(servers: [tunDNS])
+        dns.matchDomains = [""]                  // send all DNS through the tunnel resolver
+        settings.dnsSettings = dns
 
         setTunnelNetworkSettings(settings) { [weak self] error in
             if let error { completionHandler(error); return }
-            self?.readPackets()
+            self?.readLoop()
             completionHandler(nil)
         }
     }
 
-    private func readPackets() {
+    private func readLoop() {
         packetFlow.readPackets { [weak self] packets, protocols in
-            // TODO(datapath): process/forward via the selected stack:
-            //   telemetry -> drop DNS answers for telemetry domains
-            //   wireguard -> encrypt + forward to the endpoint
-            //   tor       -> forward through a Tor packet tunnel
-            // Scaffold: keep the loop alive so the interface stays established.
-            _ = packets; _ = protocols
-            self?.readPackets()
+            guard let self else { return }
+            for (i, data) in packets.enumerated() where protocols[i].int32Value == AF_INET {
+                self.handle(Array(data))
+            }
+            self.readLoop()
         }
+    }
+
+    private func handle(_ packet: [UInt8]) {
+        guard let ip = IPv4Packet.parse(packet, packet.count),
+              let udp = UDPDatagram.parse(ip),
+              udp.dstPort == UDPDatagram.dnsPort else { return }
+
+        if let q = DnsQuery.parse(udp.payload), blocklist.isBlocked(q.qName) {
+            writeReply(ip, udp, q.buildBlockedResponse())
+        } else {
+            forwarder.forward(udp.payload) { [weak self] reply in
+                if let reply { self?.writeReply(ip, udp, reply) }
+            }
+        }
+    }
+
+    private func writeReply(_ ip: IPv4Packet, _ udp: UDPDatagram, _ dns: [UInt8]) {
+        let reply = IPv4Packet.buildUDP(src: ip.dstAddr, dst: ip.srcAddr,
+                                        srcPort: udp.dstPort, dstPort: udp.srcPort, payload: dns)
+        packetFlow.writePackets([Data(reply)], withProtocols: [NSNumber(value: AF_INET)])
     }
 
     override func stopTunnel(with reason: NEProviderStopReason,
