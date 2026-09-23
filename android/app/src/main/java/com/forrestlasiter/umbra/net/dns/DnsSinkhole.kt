@@ -57,17 +57,17 @@ class DnsSinkhole(
     }
 
     private fun handle(packet: ByteArray, n: Int) {
+        val reply = sinkholeReply(packet, n, blocklist)
+        if (reply != null) {
+            synchronized(output) { output.write(reply); output.flush() }
+            SinkholeStats.update(blockedCount.incrementAndGet(), forwardedCount.get())
+            return
+        }
+        // Not a blocked DNS query -> forward it (re-parse; cheap on the non-block path).
         val ip = Ipv4Packet.parse(packet, n) ?: return
         val udp = UdpDatagram.parse(ip) ?: return
         if (udp.dstPort != UdpDatagram.DNS_PORT) return          // DNS only
-
-        val query = DnsQuery.parse(udp.payload)
-        if (query != null && blocklist.isBlocked(query.qName)) {
-            writeReply(ip, udp, query.buildBlockedResponse())
-            SinkholeStats.update(blockedCount.incrementAndGet(), forwardedCount.get())
-        } else {
-            forwarders.submit { forward(ip, udp) }               // don't block the reader
-        }
+        forwarders.submit { forward(ip, udp) }                   // don't block the reader
     }
 
     private fun forward(ip: Ipv4Packet, udp: UdpDatagram) {
@@ -113,5 +113,24 @@ class DnsSinkhole(
         private const val MAX_PACKET = 32_767
         private const val UPSTREAM_TIMEOUT_MS = 5_000
         const val DEFAULT_UPSTREAM = "1.1.1.1"
+
+        /**
+         * Pure decision + build: if [packet] is a DNS query for a blocked domain,
+         * return the full IPv4/UDP sinkhole reply to write back to the client;
+         * otherwise null (the caller forwards it). No I/O, so it's unit-tested
+         * end-to-end.
+         */
+        fun sinkholeReply(packet: ByteArray, length: Int, blocklist: TelemetryBlocklist): ByteArray? {
+            val ip = Ipv4Packet.parse(packet, length) ?: return null
+            val udp = UdpDatagram.parse(ip) ?: return null
+            if (udp.dstPort != UdpDatagram.DNS_PORT) return null
+            val query = DnsQuery.parse(udp.payload) ?: return null
+            if (!blocklist.isBlocked(query.qName)) return null
+            return Ipv4Packet.buildUdp(
+                srcAddr = ip.dstAddr, dstAddr = ip.srcAddr,
+                srcPort = udp.dstPort, dstPort = udp.srcPort,
+                udpPayload = query.buildBlockedResponse(),
+            )
+        }
     }
 }

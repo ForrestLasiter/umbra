@@ -72,6 +72,35 @@ final class NetTests: XCTestCase {
         XCTAssertEqual(TelemetryBlocklist(spec: spec, profile: "normal").count, 0)
     }
 
+    // MARK: Sinkhole end-to-end
+
+    private let client: [UInt8] = [10, 111, 0, 2]
+    private let resolver: [UInt8] = [10, 111, 0, 1]
+
+    private func queryPacket(_ name: String, _ type: Int = DnsQuery.typeA) -> [UInt8] {
+        IPv4Packet.buildUDP(src: client, dst: resolver, srcPort: 33333, dstPort: 53,
+                            payload: encodeQuery(name, type))
+    }
+
+    func testSinkholeRepliesToBlockedQuery() {
+        let bl = TelemetryBlocklist(["graph.facebook.com"])
+        let pkt = queryPacket("graph.facebook.com")
+        let reply = DnsSinkhole.reply(for: pkt, length: pkt.count, blocklist: bl)!
+        let ip = IPv4Packet.parse(reply, reply.count)!
+        XCTAssertEqual(ip.srcAddr, resolver)
+        XCTAssertEqual(ip.dstAddr, client)
+        let udp = UDPDatagram.parse(ip)!
+        XCTAssertEqual(udp.srcPort, 53)
+        XCTAssertEqual(udp.dstPort, 33333)
+        XCTAssertEqual(Array(udp.payload.suffix(4)), [0, 0, 0, 0])       // 0.0.0.0
+    }
+
+    func testSinkholePassesThroughUnblocked() {
+        let bl = TelemetryBlocklist(["graph.facebook.com"])
+        let pkt = queryPacket("example.com")
+        XCTAssertNil(DnsSinkhole.reply(for: pkt, length: pkt.count, blocklist: bl))
+    }
+
     private let SPEC = """
     {
       "umbra_spec_version": "1", "engine_version": "0.1.0",

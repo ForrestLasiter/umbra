@@ -56,23 +56,25 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
 
     private func handle(_ packet: [UInt8]) {
+        // Blocked telemetry -> answer locally (pure decision, shared with tests).
+        if let reply = DnsSinkhole.reply(for: packet, length: packet.count, blocklist: blocklist) {
+            write(reply)
+            return
+        }
+        // Otherwise forward the DNS query upstream and relay the reply.
         guard let ip = IPv4Packet.parse(packet, packet.count),
               let udp = UDPDatagram.parse(ip),
               udp.dstPort == UDPDatagram.dnsPort else { return }
-
-        if let q = DnsQuery.parse(udp.payload), blocklist.isBlocked(q.qName) {
-            writeReply(ip, udp, q.buildBlockedResponse())
-        } else {
-            forwarder.forward(udp.payload) { [weak self] reply in
-                if let reply { self?.writeReply(ip, udp, reply) }
-            }
+        forwarder.forward(udp.payload) { [weak self] reply in
+            guard let reply = reply else { return }
+            let out = IPv4Packet.buildUDP(src: ip.dstAddr, dst: ip.srcAddr,
+                                          srcPort: udp.dstPort, dstPort: udp.srcPort, payload: reply)
+            self?.write(out)
         }
     }
 
-    private func writeReply(_ ip: IPv4Packet, _ udp: UDPDatagram, _ dns: [UInt8]) {
-        let reply = IPv4Packet.buildUDP(src: ip.dstAddr, dst: ip.srcAddr,
-                                        srcPort: udp.dstPort, dstPort: udp.srcPort, payload: dns)
-        packetFlow.writePackets([Data(reply)], withProtocols: [NSNumber(value: AF_INET)])
+    private func write(_ ipv4Packet: [UInt8]) {
+        packetFlow.writePackets([Data(ipv4Packet)], withProtocols: [NSNumber(value: AF_INET)])
     }
 
     override func stopTunnel(with reason: NEProviderStopReason,
