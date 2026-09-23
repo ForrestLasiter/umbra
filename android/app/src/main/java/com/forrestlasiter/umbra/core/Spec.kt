@@ -61,6 +61,7 @@ data class ProfileSpec(
     val description: String = "",
     @SerialName("fail_mode") val failMode: String = "closed",
     val requires: List<String> = emptyList(),
+    @SerialName("telemetry_blocklists") val telemetryBlocklists: List<String> = emptyList(),
 )
 
 @Serializable
@@ -70,12 +71,19 @@ data class CoreSpec(
     @SerialName("enforcement_levels") val enforcementLevels: List<EnforcementLevel> = emptyList(),
     val capabilities: Map<String, Capability> = emptyMap(),
     val platforms: Map<String, PlatformSpec> = emptyMap(),
+    @SerialName("telemetry_blocklists") val telemetryBlocklists: Map<String, List<String>> = emptyMap(),
     val profiles: Map<String, ProfileSpec> = emptyMap(),
 ) {
     /** The enforcement level THIS platform (android) can promise for a capability. */
     fun support(capability: String, platform: String = "android"): PlatformCapability =
         platforms[platform]?.capabilities?.get(capability)
             ?: PlatformCapability("unavailable", "capability not in spec")
+
+    /** The de-duplicated union of telemetry domains a profile sinkholes. */
+    fun telemetryDomains(profileName: String): Set<String> {
+        val lists = profiles[profileName]?.telemetryBlocklists ?: emptyList()
+        return lists.flatMap { telemetryBlocklists[it] ?: emptyList() }.toSet()
+    }
 
     companion object {
         private val json = Json { ignoreUnknownKeys = true }
