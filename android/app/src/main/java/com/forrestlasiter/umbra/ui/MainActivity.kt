@@ -22,6 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.forrestlasiter.umbra.core.Enforcement
 import com.forrestlasiter.umbra.core.PlannedAction
 import com.forrestlasiter.umbra.core.PostureItem
+import com.forrestlasiter.umbra.vpn.SinkholeStats
 import com.forrestlasiter.umbra.vpn.TunnelController
 
 class MainActivity : ComponentActivity() {
@@ -117,6 +118,19 @@ class MainActivity : ComponentActivity() {
                 Card { Text(it, Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall) }
             }
 
+            // Live DNS-sinkhole counters (telemetry postures).
+            val stats by SinkholeStats.flow.collectAsStateWithLifecycle()
+            if (stats.active) {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("DNS sinkhole", fontWeight = FontWeight.SemiBold)
+                        Text("${stats.blocked} blocked · ${stats.forwarded} forwarded · " +
+                            "${stats.domains} domains",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+
             HorizontalDivider()
             Text("What ${state.selected} means on this device",
                 style = MaterialTheme.typography.titleMedium)
@@ -151,20 +165,36 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     private fun CapabilityRow(item: PostureItem) {
+        val advisoryAction = if (item.action == PlannedAction.GUIDE_TO_SETTING)
+            AdvisoryLinks.settingsActionFor(item.capability) else null
         Card(Modifier.fillMaxWidth()) {
-            Row(
-                Modifier.fillMaxWidth().padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(item.capability, fontWeight = FontWeight.SemiBold)
-                    Text(item.summary, style = MaterialTheme.typography.bodySmall)
-                    Text(item.reason, style = MaterialTheme.typography.labelSmall)
+            Column(Modifier.padding(12.dp)) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(item.capability, fontWeight = FontWeight.SemiBold)
+                        Text(item.summary, style = MaterialTheme.typography.bodySmall)
+                        Text(item.reason, style = MaterialTheme.typography.labelSmall)
+                    }
+                    EnforcementBadge(item)
                 }
-                EnforcementBadge(item)
+                // Advisory = the app can't change it, but it can take you to the
+                // OS setting that can.
+                if (advisoryAction != null) {
+                    TextButton(onClick = { openSetting(advisoryAction) }) {
+                        Text("Open setting")
+                    }
+                }
             }
         }
+    }
+
+    private fun openSetting(action: String) {
+        runCatching { startActivity(Intent(action)) }
+            .onFailure { vm.setMessage("Couldn't open that setting on this device.") }
     }
 
     @Composable

@@ -114,8 +114,7 @@ scripts/sync-spec.sh
 1. ~~**DNS sinkhole**~~ — **done.** Telemetry lookups are dropped in the tun loop.
 2. ~~**WireGuard**~~ — **done** (device-test pending). Config import + libwg-go tunnel.
 3. **Tor** — route through Orbot / arti for the `paranoid` posture.
-4. **Advisory deep-links** — wire each `advisory` capability to its OS settings
-   screen (Wi-Fi MAC, Bluetooth, private DNS).
-5. **Live counters** — surface DnsSinkhole's blocked/forwarded counts in the UI.
+4. ~~**Advisory deep-links**~~ — **done.** Advisory rows open the matching OS setting.
+5. ~~**Live counters**~~ — **done.** The UI shows blocked/forwarded while the sinkhole runs.
 6. **Sinkhole over WireGuard** — run the telemetry filter in front of the tunnel so
    tunnel postures also block by the shared list (not just the endpoint's DNS).

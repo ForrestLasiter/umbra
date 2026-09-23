@@ -4,6 +4,7 @@ import android.os.ParcelFileDescriptor
 import android.util.Log
 import com.forrestlasiter.umbra.net.Ipv4Packet
 import com.forrestlasiter.umbra.net.UdpDatagram
+import com.forrestlasiter.umbra.vpn.SinkholeStats
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.net.DatagramPacket
@@ -47,6 +48,7 @@ class DnsSinkhole(
         running.set(true)
         val buf = ByteArray(MAX_PACKET)
         Log.i(TAG, "sinkhole up: ${blocklist.size} telemetry domains")
+        SinkholeStats.started(blocklist.size)
         while (running.get()) {
             val n = try { input.read(buf) } catch (_: Exception) { break }
             if (n <= 0) continue
@@ -62,7 +64,7 @@ class DnsSinkhole(
         val query = DnsQuery.parse(udp.payload)
         if (query != null && blocklist.isBlocked(query.qName)) {
             writeReply(ip, udp, query.buildBlockedResponse())
-            blockedCount.incrementAndGet()
+            SinkholeStats.update(blockedCount.incrementAndGet(), forwardedCount.get())
         } else {
             forwarders.submit { forward(ip, udp) }               // don't block the reader
         }
@@ -78,7 +80,7 @@ class DnsSinkhole(
                 val rp = DatagramPacket(rbuf, rbuf.size)
                 sock.receive(rp)
                 writeReply(ip, udp, rbuf.copyOf(rp.length))
-                forwardedCount.incrementAndGet()
+                SinkholeStats.update(blockedCount.get(), forwardedCount.incrementAndGet())
             }
         } catch (_: Exception) {
             // timeout / io — drop; the client's resolver retries.
@@ -103,6 +105,7 @@ class DnsSinkhole(
         forwarders.shutdownNow()
         runCatching { input.close() }
         runCatching { output.close() }
+        SinkholeStats.stopped()
     }
 
     companion object {
