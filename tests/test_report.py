@@ -60,5 +60,9 @@ def test_run_audit_is_profile_aware_and_has_required_checks():
     # every required capability the profile declares appears as a check
     for token in load_profile("home").requires:
         assert any(c.id == f"require:{token}" for c in report.checks)
-    # off-Linux nothing is gradeable -> score is None (not a fake 100)
-    assert report.score() is None
+    # Score is either None (nothing gradeable -- e.g. a host without the security
+    # tools) or a real 0-100. Either way it must never be a fake 100 when nothing
+    # has actually been applied. (test_score_is_none_when_no_required_capabilities
+    # covers the None case deterministically.)
+    s = report.score()
+    assert s is None or 0 <= s < 100

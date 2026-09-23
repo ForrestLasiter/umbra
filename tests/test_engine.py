@@ -57,9 +57,17 @@ def state(tmp_path, monkeypatch):
     return tmp_path
 
 
-def test_already_compliant_still_records_active(state):
-    report = Engine(Runner(dry_run=False)).apply(load_profile("home"))
-    assert report.applied == []                       # nothing to do off-Linux
+def test_already_compliant_still_records_active(state, monkeypatch):
+    from umbra import capabilities
+    engine = Engine(Runner(dry_run=False))
+    # Hermetic "already compliant": nothing to change AND every required
+    # capability verifies. Independent of what security tools this host has
+    # installed (a bare CI box measures UNKNOWN; a real Kali box measures drift
+    # -- neither should decide this branch's contract).
+    monkeypatch.setattr(engine, "plan", lambda profile: [])
+    monkeypatch.setattr(capabilities, "unmet", lambda results: [])
+    report = engine.apply(load_profile("home"))
+    assert report.applied == []                       # nothing to do
     assert snapshots.active_profile() == "home"       # ...but posture is recorded
 
 
