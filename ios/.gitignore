@@ -1,0 +1,10 @@
+# Generated Xcode project (produced by `xcodegen generate`)
+*.xcodeproj
+*.xcworkspace
+# Swift Package Manager
+.build/
+.swiftpm/
+# Xcode user state / DerivedData
+xcuserdata/
+DerivedData/
+.DS_Store

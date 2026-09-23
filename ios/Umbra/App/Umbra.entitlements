@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Lets the app manage a Packet Tunnel Provider (the enforcement path).
+         Requires the Network Extension capability on the Apple Developer account. -->
+    <key>com.apple.developer.networking.networkextension</key>
+    <array>
+        <string>packet-tunnel-provider</string>
+    </array>
+    <!-- Shared container so the app and the extension can pass config/spec. -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.com.forrestlasiter.umbra</string>
+    </array>
+</dict>
+</plist>

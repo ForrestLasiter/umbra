@@ -1,0 +1,50 @@
+# XcodeGen spec. The .xcodeproj is a generated artifact (not committed); run
+#   cd ios && xcodegen generate
+# to produce Umbra.xcodeproj from these declarations, then open it in Xcode.
+name: Umbra
+options:
+  bundleIdPrefix: com.forrestlasiter.umbra
+  deploymentTarget:
+    iOS: "16.0"
+packages:
+  UmbraCore:
+    path: UmbraCore
+targets:
+  Umbra:
+    type: application
+    platform: iOS
+    sources:
+      - Umbra/App
+    resources:
+      - Umbra/Resources/umbra-core.json
+    dependencies:
+      - package: UmbraCore
+      - target: PacketTunnel
+        embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.forrestlasiter.umbra
+        CODE_SIGN_ENTITLEMENTS: Umbra/App/Umbra.entitlements
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+
+  PacketTunnel:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Umbra/PacketTunnel
+    resources:
+      - Umbra/Resources/umbra-core.json
+    dependencies:
+      - package: UmbraCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.forrestlasiter.umbra.PacketTunnel
+        CODE_SIGN_ENTITLEMENTS: Umbra/PacketTunnel/PacketTunnel.entitlements
+        GENERATE_INFOPLIST_FILE: YES
+    info:
+      path: Umbra/PacketTunnel/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
