@@ -51,13 +51,28 @@ def test_write_spec_emits_two_valid_json_files(tmp_path):
     assert list(Draft202012Validator(schema).iter_errors(doc)) == []
 
 
-def test_checked_in_spec_is_up_to_date():
-    # The committed spec/umbra-core.json must match what the core emits now, so a
-    # capability/profile change can't land without regenerating the contract.
+def _structural(doc: dict) -> dict:
+    """Drop free-text (description/reason) so the freshness check guards STRUCTURE
+    only. Prose is folded from YAML and reflows across PyYAML versions -- it must
+    not gate CI. Levels, capability tokens, controls, profile requires and module
+    config are what a code change alters, and those are compared exactly."""
+    def strip(o):
+        if isinstance(o, dict):
+            return {k: strip(v) for k, v in o.items() if k not in ("description", "reason")}
+        if isinstance(o, list):
+            return [strip(x) for x in o]
+        return o
+    return strip(doc)
+
+
+def test_checked_in_spec_is_structurally_up_to_date():
+    # The committed spec/umbra-core.json must match the core's structure now, so a
+    # capability/profile/enforcement change can't land without regenerating it.
     from umbra import paths
     root = paths._PKG_DIR.parent            # repo root (package's parent)
     committed = root / "spec" / "umbra-core.json"
     if not committed.exists():
         return  # not in a source checkout (e.g. installed wheel) -- nothing to compare
     on_disk = json.loads(committed.read_text(encoding="utf-8"))
-    assert on_disk == spec.build_spec(), "spec/umbra-core.json is stale; run: umbra export-spec"
+    assert _structural(on_disk) == _structural(spec.build_spec()), \
+        "spec/umbra-core.json is structurally stale; run: umbra export-spec"
