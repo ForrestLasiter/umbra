@@ -45,4 +45,30 @@ final class WgConfigTests: XCTestCase {
     func testEndpointWithoutPortRejected() {
         XCTAssertThrowsError(try WgConfig.validate(config(endpoint: "vpn.example.com")))
     }
+
+    // MARK: Store
+
+    private func tempDir() -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("umbra-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    func testStoreSaveLoadSummary() throws {
+        let store = WgConfigStore(directory: tempDir())
+        XCTAssertFalse(store.exists())
+        try store.save(config())
+        XCTAssertTrue(store.exists())
+        XCTAssertEqual(store.summary()?.endpoint, "vpn.example.com:51820")
+        XCTAssertEqual(store.load(), config())
+        store.clear()
+        XCTAssertFalse(store.exists())
+    }
+
+    func testStoreRejectsInvalidConfig() {
+        let store = WgConfigStore(directory: tempDir())
+        XCTAssertThrowsError(try store.save("not a config"))
+        XCTAssertFalse(store.exists())
+    }
 }
