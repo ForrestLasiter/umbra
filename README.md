@@ -80,6 +80,8 @@ via `sudo` or `--pkexec` (a desktop auth dialog).
 | `umbra panic` | go dark **now** — slam straight to the `paranoid` posture |
 | `umbra vpn <config> [--name NAME]` | import a WireGuard `.conf` for `tunnel(wireguard)` |
 | `umbra tray` | run the system-tray posture toggle (desktop) |
+| `umbra capabilities [--platform P] [--profile]` | what a platform (`linux`/`android`/`ios`) can honestly enforce |
+| `umbra export-spec [--out DIR]` | write the language-neutral core spec for the mobile adapters |
 
 **Global flags:** `--dry-run` (show mutations without doing them), `--json`
 (machine-readable output where supported), `--confirm` (acknowledge a
@@ -207,6 +209,25 @@ pip install -e ".[dev]"
 umbra --help
 pytest -q
 ```
+
+## Platform boundary (toward the phone app)
+
+Linux is the reference *because* it can enforce everything; a phone can't, and
+Umbra won't pretend otherwise. The core is platform-agnostic (profiles, the
+posture model, capabilities, audit/scoring) and declares, per capability, the
+strongest promise each platform can honestly make — six distinct levels:
+`enforced`, `requires_entitlement`, `requires_vpn_profile`, `requires_rooted_os`,
+`advisory`, `unavailable`.
+
+```bash
+umbra capabilities --platform android --profile travel   # what THIS device can keep
+umbra export-spec                                         # spec/umbra-core.json for Kotlin/Swift
+```
+
+`spec/umbra-core.json` is the language-neutral contract the Android (VPNService)
+and iOS (Network Extension) adapters consume, so all three platforms speak one
+posture language. See [`docs/phases/PHASE-16.md`](docs/phases/PHASE-16.md) for the
+full boundary and the enforcement matrix.
 
 ## Documentation
 

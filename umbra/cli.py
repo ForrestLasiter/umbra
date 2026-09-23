@@ -8,6 +8,8 @@ Commands:
   umbra normal               restore to stock (apply the `normal` profile)
   umbra restore [--tx ID]    restore a transaction (default: current)
   umbra audit [profile]      read-only proof of posture
+  umbra capabilities         what a platform can honestly enforce (linux/android/ios)
+  umbra export-spec          write the language-neutral core spec for the mobile adapters
 
 Global flags: --dry-run, --json, --verbose, --confirm, --profiles-dir
 """
@@ -258,6 +260,59 @@ def cmd_dashboard(args, runner: Runner) -> int:
     return 0
 
 
+def cmd_capabilities(args, runner: Runner) -> int:
+    """Print the honest per-platform enforcement matrix.
+
+    The core question a phone app must answer truthfully: for the posture you
+    picked, what can THIS device actually promise? Linux (the reference) enforces
+    everything; Android/iOS say so plainly where they can't.
+    """
+    from umbra import platform as plat
+
+    try:
+        target = plat.Platform(args.platform)
+    except ValueError:
+        print(f"umbra: unknown platform '{args.platform}' "
+              f"(one of: {', '.join(p.value for p in plat.Platform)})", file=sys.stderr)
+        return 2
+
+    if args.profile:
+        profile = load_profile(args.profile, args.profiles_dir)
+        rows = plat.profile_support(target, profile.requires)
+        scope = f"profile '{profile.name}' requires {len(rows)} capabilities"
+    else:
+        rows = plat.matrix(target)
+        scope = f"all {len(rows)} capabilities"
+
+    if args.json:
+        print(json.dumps(
+            {"platform": target.value,
+             "capabilities": [{"capability": r.capability, "level": r.level.value,
+                               "reason": r.reason, "actionable": r.actionable} for r in rows]},
+            indent=2))
+        return 0
+
+    print(f"capabilities on {target.value} - {scope}\n")
+    for r in rows:
+        mark = "++" if r.level is plat.Enforcement.ENFORCED else (
+            "~~" if r.level is plat.Enforcement.ADVISORY else (
+                "xx" if r.level is plat.Enforcement.UNAVAILABLE else ".."))
+        print(f"  {mark} {r.capability:<14} {r.level.value}")
+        print(f"        {r.reason}")
+    return 0
+
+
+def cmd_export_spec(args, runner: Runner) -> int:
+    """Emit the language-neutral core spec the Android/iOS adapters consume."""
+    from umbra import spec
+
+    out_dir = Path(args.out) if args.out else Path("spec")
+    spec_path, schema_path = spec.write_spec(out_dir)
+    print(f"wrote core spec  -> {spec_path}")
+    print(f"wrote spec schema -> {schema_path}")
+    return 0
+
+
 def cmd_tray(args, runner: Runner) -> int:
     from umbra.tray import run
     return run()
@@ -365,6 +420,17 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("panic", help="go dark now (apply the paranoid profile)")
     sub.add_parser("tray", help="run the system-tray posture toggle (desktop)")
 
+    sp = sub.add_parser("capabilities",
+                        help="what a platform can honestly enforce (Linux/Android/iOS)")
+    sp.add_argument("--platform", default="linux",
+                    help="linux | android | ios (default: linux)")
+    sp.add_argument("--profile", nargs="?", default=None,
+                    help="limit to the capabilities this profile requires")
+
+    sp = sub.add_parser("export-spec",
+                        help="write the language-neutral core spec (for the mobile adapters)")
+    sp.add_argument("--out", default=None, help="output directory (default: ./spec)")
+
     sp = sub.add_parser("vpn", help="import a WireGuard config for tunnel(wireguard)")
     sp.add_argument("config", help="path to a .conf file to import")
     sp.add_argument("--name", default="vpn", help="profile_ref name to save it as (default: vpn)")
@@ -384,6 +450,8 @@ _HANDLERS = {
     "panic": cmd_panic,
     "vpn": cmd_vpn,
     "tray": cmd_tray,
+    "capabilities": cmd_capabilities,
+    "export-spec": cmd_export_spec,
 }
 
 

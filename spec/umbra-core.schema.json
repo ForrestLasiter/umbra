@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Umbra core spec",
+  "type": "object",
+  "required": [
+    "umbra_spec_version",
+    "engine_version",
+    "enforcement_levels",
+    "capabilities",
+    "platforms",
+    "profiles",
+    "audit"
+  ],
+  "properties": {
+    "umbra_spec_version": {
+      "type": "string"
+    },
+    "engine_version": {
+      "type": "string"
+    },
+    "enforcement_levels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "description"
+        ],
+        "properties": {
+          "name": {
+            "enum": [
+              "enforced",
+              "requires_entitlement",
+              "requires_vpn_profile",
+              "requires_rooted_os",
+              "advisory",
+              "unavailable"
+            ]
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "description",
+          "controls"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "controls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "platforms": {
+      "type": "object",
+      "required": [
+        "linux",
+        "android",
+        "ios"
+      ],
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "description",
+          "capabilities"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "capabilities": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "level",
+                "reason"
+              ],
+              "properties": {
+                "level": {
+                  "enum": [
+                    "enforced",
+                    "requires_entitlement",
+                    "requires_vpn_profile",
+                    "requires_rooted_os",
+                    "advisory",
+                    "unavailable"
+                  ]
+                },
+                "reason": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "requires",
+          "fail_mode"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "fail_mode": {
+            "type": "string"
+          },
+          "requires": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "modules": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "audit": {
+      "type": "object"
+    }
+  }
+}
