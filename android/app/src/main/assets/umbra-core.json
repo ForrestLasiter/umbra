@@ -1,0 +1,489 @@
+{
+  "umbra_spec_version": "1",
+  "engine_version": "0.1.0",
+  "enforcement_levels": [
+    {
+      "name": "enforced",
+      "description": "Guaranteed with ordinary app permissions."
+    },
+    {
+      "name": "requires_entitlement",
+      "description": "Enforced after the OS grants a special entitlement (e.g. VPN consent, Network Extension)."
+    },
+    {
+      "name": "requires_vpn_profile",
+      "description": "Enforced only while an Umbra tunnel/VPN profile is active."
+    },
+    {
+      "name": "requires_rooted_os",
+      "description": "Only possible with root or a custom OS build."
+    },
+    {
+      "name": "advisory",
+      "description": "The app can measure and warn, but cannot change it."
+    },
+    {
+      "name": "unavailable",
+      "description": "Not applicable or impossible on this platform."
+    }
+  ],
+  "capabilities": {
+    "bluetooth_off": {
+      "description": "Keep the Bluetooth radio off.",
+      "controls": [
+        "rf.radio_bluetooth"
+      ]
+    },
+    "discovery": {
+      "description": "Emit no local-network discovery chatter (mDNS/LLMNR/NetBIOS/SSDP/WSD).",
+      "controls": [
+        "netdark.mdns",
+        "netdark.netbios",
+        "netdark.llmnr",
+        "netdark.ssdp_upnp",
+        "netdark.wsd"
+      ]
+    },
+    "firewall": {
+      "description": "Do not be reachable from the local network (default-deny inbound).",
+      "controls": [
+        "netdark.inbound_policy"
+      ]
+    },
+    "hostname": {
+      "description": "Do not broadcast a stable hostname over DHCP.",
+      "controls": [
+        "identity.dhcp_hostname"
+      ]
+    },
+    "ipv6_privacy": {
+      "description": "Use rotating IPv6 privacy addresses, not a stable EUI-64.",
+      "controls": [
+        "netdark.ipv6_privacy"
+      ]
+    },
+    "kernel": {
+      "description": "Apply kernel hardening (restricted pointers/dmesg/ptrace, full ASLR).",
+      "controls": [
+        "kernel.sc_*"
+      ]
+    },
+    "mac": {
+      "description": "Randomize the Wi-Fi MAC so the hardware address is not a tracker.",
+      "controls": [
+        "rf.mac"
+      ]
+    },
+    "telemetry": {
+      "description": "Block OS/app phone-home and telemetry destinations.",
+      "controls": [
+        "telemetry.hosts_sinkhole"
+      ]
+    },
+    "tor": {
+      "description": "Route all traffic through Tor with an egress killswitch.",
+      "controls": [
+        "tunnel.tor_config",
+        "tunnel.route",
+        "tunnel.killswitch"
+      ]
+    },
+    "webcam_off": {
+      "description": "Disable the camera at the device level.",
+      "controls": [
+        "kernel.disable_webcam"
+      ]
+    },
+    "wireguard": {
+      "description": "Route all traffic through a WireGuard tunnel with an egress killswitch.",
+      "controls": [
+        "tunnel.route",
+        "tunnel.killswitch"
+      ]
+    }
+  },
+  "platforms": {
+    "linux": {
+      "description": "Reference implementation. Enforces every control directly (nftables, systemd, sysctl, rfkill, Tor).",
+      "capabilities": {
+        "bluetooth_off": {
+          "level": "enforced",
+          "reason": "rfkill soft-block"
+        },
+        "discovery": {
+          "level": "enforced",
+          "reason": "stop/av mDNS/LLMNR/NetBIOS/SSDP/WSD daemons"
+        },
+        "firewall": {
+          "level": "enforced",
+          "reason": "nftables default-DROP inbound"
+        },
+        "hostname": {
+          "level": "enforced",
+          "reason": "NetworkManager dhcp-send-hostname=false"
+        },
+        "ipv6_privacy": {
+          "level": "enforced",
+          "reason": "sysctl use_tempaddr"
+        },
+        "kernel": {
+          "level": "enforced",
+          "reason": "hardening sysctls"
+        },
+        "mac": {
+          "level": "enforced",
+          "reason": "NetworkManager per-network MAC randomization"
+        },
+        "telemetry": {
+          "level": "enforced",
+          "reason": "/etc/hosts sinkhole + disable phone-home units"
+        },
+        "tor": {
+          "level": "enforced",
+          "reason": "nftables transparent-proxy redirect to Tor"
+        },
+        "webcam_off": {
+          "level": "enforced",
+          "reason": "unload the uvcvideo kernel module"
+        },
+        "wireguard": {
+          "level": "enforced",
+          "reason": "wg-quick + nftables killswitch"
+        }
+      }
+    },
+    "android": {
+      "description": "VPNService-based. Real egress/DNS/tunnel control without root; kernel and system firewall need root.",
+      "capabilities": {
+        "bluetooth_off": {
+          "level": "advisory",
+          "reason": "Android 13+ blocks apps from toggling the radio; guide the user to the toggle"
+        },
+        "discovery": {
+          "level": "advisory",
+          "reason": "system owns mDNS/NSD; an app cannot silence it without root"
+        },
+        "firewall": {
+          "level": "requires_rooted_os",
+          "reason": "a system inbound firewall needs root; unrooted Android already sandboxes inbound per-app"
+        },
+        "hostname": {
+          "level": "advisory",
+          "reason": "modern Android randomizes the DHCP hostname itself; app can only verify"
+        },
+        "ipv6_privacy": {
+          "level": "advisory",
+          "reason": "Android enables IPv6 privacy addresses by default; not app-toggleable"
+        },
+        "kernel": {
+          "level": "requires_rooted_os",
+          "reason": "sysctl hardening requires root / a custom ROM"
+        },
+        "mac": {
+          "level": "advisory",
+          "reason": "Android 10+ randomizes MAC per-SSID by default; app verifies, cannot force"
+        },
+        "telemetry": {
+          "level": "requires_vpn_profile",
+          "reason": "sinkhole telemetry domains via a local VPNService DNS filter"
+        },
+        "tor": {
+          "level": "requires_vpn_profile",
+          "reason": "route all traffic through Tor via a VPNService packet tunnel"
+        },
+        "webcam_off": {
+          "level": "advisory",
+          "reason": "no module unload; guide to the OS camera kill-switch / permission revoke"
+        },
+        "wireguard": {
+          "level": "requires_entitlement",
+          "reason": "native WireGuard over VPNService after a one-time VPN-consent grant"
+        }
+      }
+    },
+    "ios": {
+      "description": "Network Extension-based. DNS and the tunnel via an entitlement; nearly everything else is advisory.",
+      "capabilities": {
+        "bluetooth_off": {
+          "level": "advisory",
+          "reason": "no programmatic radio toggle; guide the user to Control Center"
+        },
+        "discovery": {
+          "level": "advisory",
+          "reason": "system Bonjour is not app-controllable"
+        },
+        "firewall": {
+          "level": "unavailable",
+          "reason": "iOS exposes no app-level inbound firewall"
+        },
+        "hostname": {
+          "level": "advisory",
+          "reason": "iOS manages the DHCP hostname; app can only verify"
+        },
+        "ipv6_privacy": {
+          "level": "advisory",
+          "reason": "iOS uses private/temporary addresses by default; not app-toggleable"
+        },
+        "kernel": {
+          "level": "unavailable",
+          "reason": "no sysctl / kernel access in the app sandbox"
+        },
+        "mac": {
+          "level": "advisory",
+          "reason": "'Private Wi-Fi Address' is on per-network by default; not app-controllable"
+        },
+        "telemetry": {
+          "level": "requires_entitlement",
+          "reason": "block telemetry domains via a Network Extension DNS proxy / content filter"
+        },
+        "tor": {
+          "level": "requires_vpn_profile",
+          "reason": "route through Tor via a Packet Tunnel Provider"
+        },
+        "webcam_off": {
+          "level": "unavailable",
+          "reason": "camera is permission-gated only; no disable primitive"
+        },
+        "wireguard": {
+          "level": "requires_entitlement",
+          "reason": "WireGuard via NEVPNManager with the Network Extension entitlement"
+        }
+      }
+    }
+  },
+  "profiles": {
+    "home": {
+      "description": "Sane hardening for a trusted LAN. Blocks telemetry and local discovery, raises a stealth firewall, and randomizes the MAC per network \u00e2\u20ac\u201d while staying usable (no killswitch, no radios off).\n",
+      "fail_mode": "open",
+      "requires": [
+        "firewall",
+        "ipv6_privacy",
+        "discovery",
+        "telemetry",
+        "kernel",
+        "hostname",
+        "mac"
+      ],
+      "modules": {
+        "kernel": {
+          "enabled": true,
+          "hardening_sysctls": true,
+          "disable_webcam": false
+        },
+        "identity": {
+          "enabled": true,
+          "dhcp_hostname_suppress": true
+        },
+        "rf": {
+          "enabled": true,
+          "mac_randomization": "per-network",
+          "suppress_probe_requests": true,
+          "bluetooth": "on",
+          "radios": [
+            "wifi",
+            "bluetooth"
+          ]
+        },
+        "netdark": {
+          "enabled": true,
+          "inbound_policy": "drop",
+          "discovery": {
+            "mdns": true,
+            "llmnr": true,
+            "netbios": true,
+            "ssdp_upnp": true,
+            "wsd": true
+          },
+          "ipv6_privacy": true,
+          "block_listening_services": false
+        },
+        "tunnel": {
+          "enabled": false
+        },
+        "telemetry": {
+          "enabled": true,
+          "blocklists": [
+            "os",
+            "common-trackers"
+          ],
+          "egress": "blocklist",
+          "disable_os_telemetry": true
+        }
+      }
+    },
+    "normal": {
+      "description": "Baseline. Every control off / asserting nothing. Applying this profile is the supported way to \"return the machine to stock\" \u00e2\u20ac\u201d it restores the snapshots of whatever the previously active profile changed.\n",
+      "fail_mode": "open",
+      "requires": [],
+      "modules": {
+        "rf": {
+          "enabled": false
+        },
+        "netdark": {
+          "enabled": false
+        },
+        "tunnel": {
+          "enabled": false
+        },
+        "telemetry": {
+          "enabled": false
+        }
+      }
+    },
+    "paranoid": {
+      "description": "Go dark. Maximum reduction of observable signature and attack surface. MAC fully randomized (or radios killed), zero local broadcasts, no listening services, traffic over Tor (or radios off entirely), telemetry sinkholed. NOTE: \"radios off\" is the only true-invisibility setting; with wifi permitted the device is still an RF emitter and detectable as such.\n",
+      "fail_mode": "closed",
+      "requires": [
+        "firewall",
+        "ipv6_privacy",
+        "discovery",
+        "telemetry",
+        "kernel",
+        "hostname",
+        "mac",
+        "bluetooth_off",
+        "webcam_off",
+        "tor"
+      ],
+      "modules": {
+        "kernel": {
+          "enabled": true,
+          "hardening_sysctls": true,
+          "disable_webcam": true
+        },
+        "identity": {
+          "enabled": true,
+          "dhcp_hostname_suppress": true
+        },
+        "rf": {
+          "enabled": true,
+          "mac_randomization": "full",
+          "suppress_probe_requests": true,
+          "bluetooth": "off",
+          "radios": [
+            "wifi"
+          ]
+        },
+        "netdark": {
+          "enabled": true,
+          "inbound_policy": "drop",
+          "discovery": {
+            "mdns": true,
+            "llmnr": true,
+            "netbios": true,
+            "ssdp_upnp": true,
+            "wsd": true
+          },
+          "ipv6_privacy": true,
+          "block_listening_services": true
+        },
+        "tunnel": {
+          "enabled": true,
+          "mode": "tor",
+          "profile_ref": "vpn",
+          "killswitch": true,
+          "dns": "tunnel",
+          "leak_guard": [
+            "dns",
+            "ipv6"
+          ]
+        },
+        "telemetry": {
+          "enabled": true,
+          "blocklists": [
+            "os",
+            "common-trackers"
+          ],
+          "egress": "blocklist",
+          "disable_os_telemetry": true
+        }
+      }
+    },
+    "travel": {
+      "description": "Hostile-network mode. Assume the LAN and ISP are adversarial: MAC randomized, all local discovery silenced, Bluetooth off, all traffic forced through the tunnel with a killswitch, and known telemetry sinkholed.\n",
+      "fail_mode": "closed",
+      "requires": [
+        "firewall",
+        "ipv6_privacy",
+        "discovery",
+        "telemetry",
+        "kernel",
+        "hostname",
+        "mac",
+        "bluetooth_off",
+        "wireguard"
+      ],
+      "modules": {
+        "kernel": {
+          "enabled": true,
+          "hardening_sysctls": true,
+          "disable_webcam": false
+        },
+        "identity": {
+          "enabled": true,
+          "dhcp_hostname_suppress": true
+        },
+        "rf": {
+          "enabled": true,
+          "mac_randomization": "per-network",
+          "suppress_probe_requests": true,
+          "bluetooth": "off",
+          "radios": [
+            "wifi"
+          ]
+        },
+        "netdark": {
+          "enabled": true,
+          "inbound_policy": "drop",
+          "discovery": {
+            "mdns": true,
+            "llmnr": true,
+            "netbios": true,
+            "ssdp_upnp": true,
+            "wsd": true
+          },
+          "ipv6_privacy": true,
+          "block_listening_services": true
+        },
+        "tunnel": {
+          "enabled": true,
+          "mode": "wireguard",
+          "profile_ref": "vpn",
+          "killswitch": true,
+          "dns": "tunnel",
+          "leak_guard": [
+            "dns",
+            "ipv6"
+          ]
+        },
+        "telemetry": {
+          "enabled": true,
+          "blocklists": [
+            "os",
+            "common-trackers"
+          ],
+          "egress": "blocklist",
+          "disable_os_telemetry": true
+        }
+      }
+    }
+  },
+  "audit": {
+    "status_values": [
+      "ok",
+      "warn",
+      "fail",
+      "info",
+      "na"
+    ],
+    "check_fields": [
+      "id",
+      "title",
+      "category",
+      "status",
+      "evidence",
+      "recommendation"
+    ],
+    "score": "0-100 over the profile's REQUIRED, gradeable capabilities; null when none are gradeable. Never a fake 100."
+  }
+}

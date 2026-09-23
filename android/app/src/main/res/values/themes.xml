@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compose supplies the real theme (MaterialTheme in MainActivity); this XML
+         theme only needs a no-action-bar base, so we use a built-in parent and
+         avoid pulling in the Material Components XML library. -->
+    <style name="Theme.Umbra" parent="@android:style/Theme.DeviceDefault.NoActionBar" />
+</resources>
