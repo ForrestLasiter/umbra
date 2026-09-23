@@ -75,6 +75,31 @@ CASES = [
     ("analytics.google.com", 15),   # MX    -> NXDOMAIN
 ]
 
+# Blocklist matching: exact + subdomain, case-insensitive, no false parents.
+BLOCKLIST_DOMAINS = ["graph.facebook.com", "app-measurement.com"]
+BLOCKLIST_CASES = [
+    ("graph.facebook.com", True),                 # exact
+    ("edge.graph.facebook.com", True),            # subdomain
+    ("APP-MEASUREMENT.COM", True),                # case-insensitive
+    ("app-measurement.com.", True),               # trailing dot
+    ("facebook.com", False),                      # parent of a blocked host, not blocked
+    ("example.com", False),
+    ("notgraph.facebook.com.evil.com", False),    # no false suffix match
+]
+
+
+def is_blocked(domains: list[str], name: str) -> bool:
+    dset = {d.lower().rstrip(".") for d in domains}
+    n = name.lower().rstrip(".")
+    if n in dset:
+        return True
+    i = n.find(".")
+    while i != -1:
+        if n[i + 1:] in dset:
+            return True
+        i = n.find(".", i + 1)
+    return False
+
 
 def build() -> dict:
     vectors = []
@@ -83,7 +108,14 @@ def build() -> dict:
         r = blocked_response(q)
         vectors.append({"name": name, "qtype": qtype,
                         "query_hex": q.hex(), "response_hex": r.hex()})
-    return {"version": 1, "dns_blocked_responses": vectors}
+    return {
+        "version": 1,
+        "dns_blocked_responses": vectors,
+        "blocklist": {
+            "domains": BLOCKLIST_DOMAINS,
+            "cases": [{"name": n, "blocked": b} for n, b in BLOCKLIST_CASES],
+        },
+    }
 
 
 def main() -> None:

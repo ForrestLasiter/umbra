@@ -25,5 +25,41 @@
       "query_hex": "12340100000100000000000009616e616c797469637306676f6f676c6503636f6d00000f0001",
       "response_hex": "12348183000100000000000009616e616c797469637306676f6f676c6503636f6d00000f0001"
     }
-  ]
+  ],
+  "blocklist": {
+    "domains": [
+      "graph.facebook.com",
+      "app-measurement.com"
+    ],
+    "cases": [
+      {
+        "name": "graph.facebook.com",
+        "blocked": true
+      },
+      {
+        "name": "edge.graph.facebook.com",
+        "blocked": true
+      },
+      {
+        "name": "APP-MEASUREMENT.COM",
+        "blocked": true
+      },
+      {
+        "name": "app-measurement.com.",
+        "blocked": true
+      },
+      {
+        "name": "facebook.com",
+        "blocked": false
+      },
+      {
+        "name": "example.com",
+        "blocked": false
+      },
+      {
+        "name": "notgraph.facebook.com.evil.com",
+        "blocked": false
+      }
+    ]
+  }
 }

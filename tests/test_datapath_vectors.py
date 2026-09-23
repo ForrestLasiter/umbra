@@ -50,6 +50,13 @@ def test_a_record_vectors_sinkhole_to_zero():
             assert bytes.fromhex(v["response_hex"])[-4:] == b"\x00\x00\x00\x00"
 
 
+def test_blocklist_cases_match_the_reference_matcher():
+    doc = json.loads(CANONICAL.read_text(encoding="utf-8"))
+    domains = doc["blocklist"]["domains"]
+    for c in doc["blocklist"]["cases"]:
+        assert gen.is_blocked(domains, c["name"]) == c["blocked"], c["name"]
+
+
 def test_mobile_copies_are_byte_identical():
     canonical = CANONICAL.read_text(encoding="utf-8")
     for copy in COPIES:

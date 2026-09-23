@@ -9,16 +9,36 @@ final class DatapathVectorsTests: XCTestCase {
     private struct Vector: Codable {
         let name: String; let qtype: Int; let query_hex: String; let response_hex: String
     }
-    private struct Doc: Codable { let dns_blocked_responses: [Vector] }
+    private struct Blocklist: Codable {
+        let domains: [String]
+        let cases: [Case]
+        struct Case: Codable { let name: String; let blocked: Bool }
+    }
+    private struct Doc: Codable {
+        let dns_blocked_responses: [Vector]
+        let blocklist: Blocklist
+    }
+
+    private func loadDoc() throws -> Doc {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "datapath-vectors", withExtension: "json"))
+        return try JSONDecoder().decode(Doc.self, from: Data(contentsOf: url))
+    }
 
     func testBlockedResponsesMatchGoldenVectors() throws {
-        let url = try XCTUnwrap(Bundle.module.url(forResource: "datapath-vectors", withExtension: "json"))
-        let doc = try JSONDecoder().decode(Doc.self, from: Data(contentsOf: url))
+        let doc = try loadDoc()
         XCTAssertGreaterThanOrEqual(doc.dns_blocked_responses.count, 4)
         for v in doc.dns_blocked_responses {
             let query = [UInt8](hex: v.query_hex)
             let response = DnsQuery.parse(query)!.buildBlockedResponse()
             XCTAssertEqual(response.hexString, v.response_hex, v.name)
+        }
+    }
+
+    func testBlocklistMatchingMatchesGoldenVectors() throws {
+        let doc = try loadDoc()
+        let list = TelemetryBlocklist(Set(doc.blocklist.domains))
+        for c in doc.blocklist.cases {
+            XCTAssertEqual(list.isBlocked(c.name), c.blocked, c.name)
         }
     }
 }

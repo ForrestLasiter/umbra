@@ -1,6 +1,7 @@
 package com.forrestlasiter.umbra.net.dns
 
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -26,6 +27,20 @@ class DatapathVectorsTest {
             val expected = o["response_hex"]!!.jsonPrimitive.content
             val response = DnsQuery.parse(query)!!.buildBlockedResponse()
             assertEquals("response mismatch for $name", expected, bytesToHex(response))
+        }
+    }
+
+    @Test fun blocklist_matching_matches_the_golden_vectors() {
+        val text = javaClass.getResourceAsStream("/datapath-vectors.json")!!
+            .bufferedReader().readText()
+        val bl = Json.parseToJsonElement(text).jsonObject["blocklist"]!!.jsonObject
+        val domains = bl["domains"]!!.jsonArray.map { it.jsonPrimitive.content }.toSet()
+        val list = TelemetryBlocklist(domains)
+        for (c in bl["cases"]!!.jsonArray) {
+            val o = c.jsonObject
+            val name = o["name"]!!.jsonPrimitive.content
+            assertEquals("blocklist mismatch for $name",
+                o["blocked"]!!.jsonPrimitive.boolean, list.isBlocked(name))
         }
     }
 
