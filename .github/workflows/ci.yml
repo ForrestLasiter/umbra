@@ -96,10 +96,11 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.9"
       - name: Unit tests
         working-directory: android
+        # ubuntu-latest ships the Android SDK preinstalled (licenses accepted);
+        # AGP finds it via ANDROID_SDK_ROOT and downloads any missing components.
         run: gradle :app:testDebugUnitTest --no-daemon --stacktrace
