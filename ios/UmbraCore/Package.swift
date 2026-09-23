@@ -11,6 +11,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "UmbraCore"),
-        .testTarget(name: "UmbraCoreTests", dependencies: ["UmbraCore"]),
+        .testTarget(name: "UmbraCoreTests", dependencies: ["UmbraCore"],
+                    resources: [.process("datapath-vectors.json")]),
     ]
 )
