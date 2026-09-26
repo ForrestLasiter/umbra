@@ -1,0 +1,34 @@
+-- Umbra posture widget for Conky (1.10+ Lua config).
+--
+--   cp contrib/umbra.conkyrc ~/.config/conky/umbra.conkyrc
+--   conky -c ~/.config/conky/umbra.conkyrc
+--
+-- It polls `umbra conky` every 15s (read-only, no root needed) and renders the
+-- active posture, the audit score, and a tick/cross per required capability.
+-- `umbra` must be on Conky's PATH (install.sh / the .deb put it in /usr/bin).
+
+conky.config = {
+    alignment = 'top_right',
+    gap_x = 24,
+    gap_y = 48,
+    minimum_width = 240,
+    own_window = true,
+    own_window_type = 'desktop',
+    own_window_transparent = true,
+    own_window_argb_visual = true,
+    own_window_argb_value = 160,
+    own_window_hints = 'undecorated,below,sticky,skip_taskbar,skip_pager',
+    double_buffer = true,
+    update_interval = 5.0,
+    use_xft = true,
+    font = 'DejaVu Sans Mono:size=10',
+    default_color = 'cccccc',
+    draw_shades = false,
+    override_utf8_locale = true,
+}
+
+conky.text = [[
+${execpi 15 umbra conky}
+${color 888a85}${hr 1}${color}
+${color 888a85}updated${color} ${time %H:%M:%S}
+]]

@@ -82,6 +82,7 @@ via `sudo` or `--pkexec` (a desktop auth dialog).
 | `umbra tray` | run the system-tray posture toggle (desktop) |
 | `umbra capabilities [--platform P] [--profile]` | what a platform (`linux`/`android`/`ios`) can honestly enforce |
 | `umbra export-spec [--out DIR]` | write the language-neutral core spec for the mobile adapters |
+| `umbra conky [profile] [--field N] [--plain]` | emit posture as Conky-friendly text for a desktop widget |
 
 **Global flags:** `--dry-run` (show mutations without doing them), `--json`
 (machine-readable output where supported), `--confirm` (acknowledge a
@@ -219,6 +220,21 @@ pip install -e ".[dev]"
 umbra --help
 pytest -q
 ```
+
+## Desktop widget (Conky)
+
+Umbra's audit is read-only and scored, which makes it a natural Conky panel:
+
+```bash
+cp contrib/umbra.conkyrc ~/.config/conky/umbra.conkyrc
+conky -c ~/.config/conky/umbra.conkyrc
+```
+
+`umbra conky` prints the active posture, the audit score, and a tick/cross per
+required capability as Conky-markup text — poll it with `${execpi 15 umbra
+conky}`. For a hand-built layout, `umbra conky --field score` (or `active` /
+`fail` / `tor` / …) prints one value for `${execi}`, and `--plain` drops the
+colour markup. It needs no root (the audit degrades to N/A without it).
 
 ## Platform boundary (toward the phone app)
 

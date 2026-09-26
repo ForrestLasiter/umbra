@@ -10,6 +10,7 @@ Commands:
   umbra audit [profile]      read-only proof of posture
   umbra capabilities         what a platform can honestly enforce (linux/android/ios)
   umbra export-spec          write the language-neutral core spec for the mobile adapters
+  umbra conky                emit posture as Conky-friendly text (desktop widget)
 
 Global flags: --dry-run, --json, --verbose, --confirm, --profiles-dir
 """
@@ -260,6 +261,35 @@ def cmd_dashboard(args, runner: Runner) -> int:
     return 0
 
 
+def cmd_conky(args, runner: Runner) -> int:
+    """Emit posture as Conky-friendly text (for ${execpi} / ${execi})."""
+    from umbra import conky
+
+    active = snapshots.active_profile()
+    target = args.profile or active or "home"
+    profile = load_profile(target, args.profiles_dir)
+    report = run_audit(runner, profile)
+
+    if args.field:
+        try:
+            text = conky.field(report, active, args.field)
+        except KeyError:
+            print(f"umbra: unknown --field '{args.field}'", file=sys.stderr)
+            return 2
+    else:
+        text = conky.render_block(report, active, color=not args.plain)
+
+    # Conky consumes UTF-8; write bytes so a non-UTF-8 console locale can't mangle
+    # the glyphs (✓ ✗ ◐).
+    buf = getattr(sys.stdout, "buffer", None)
+    if buf is not None:
+        buf.write((text + "\n").encode("utf-8"))
+        buf.flush()
+    else:
+        print(text)
+    return 0
+
+
 def cmd_capabilities(args, runner: Runner) -> int:
     """Print the honest per-platform enforcement matrix.
 
@@ -431,6 +461,13 @@ def build_parser() -> argparse.ArgumentParser:
                         help="write the language-neutral core spec (for the mobile adapters)")
     sp.add_argument("--out", default=None, help="output directory (default: ./spec)")
 
+    sp = sub.add_parser("conky", help="emit posture as Conky-friendly text")
+    sp.add_argument("profile", nargs="?", default=None,
+                    help="profile to audit against (default: active profile, else home)")
+    sp.add_argument("--field", default=None,
+                    help="print one value: profile/active/score/ok/warn/fail/info/na/tor")
+    sp.add_argument("--plain", action="store_true", help="no Conky colour markup")
+
     sp = sub.add_parser("vpn", help="import a WireGuard config for tunnel(wireguard)")
     sp.add_argument("config", help="path to a .conf file to import")
     sp.add_argument("--name", default="vpn", help="profile_ref name to save it as (default: vpn)")
@@ -452,6 +489,7 @@ _HANDLERS = {
     "tray": cmd_tray,
     "capabilities": cmd_capabilities,
     "export-spec": cmd_export_spec,
+    "conky": cmd_conky,
 }
 
 
