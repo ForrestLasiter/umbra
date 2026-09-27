@@ -83,6 +83,7 @@ via `sudo` or `--pkexec` (a desktop auth dialog).
 | `umbra capabilities [--platform P] [--profile]` | what a platform (`linux`/`android`/`ios`) can honestly enforce |
 | `umbra export-spec [--out DIR]` | write the language-neutral core spec for the mobile adapters |
 | `umbra conky [profile] [--field N] [--plain]` | emit posture as Conky-friendly text for a desktop widget |
+| `umbra hud [profile] [--once] [--edge E] [--public-ip]` | always-on posture status bar (GTK dock bar, or a line/JSON for a WM bar) |
 
 **Global flags:** `--dry-run` (show mutations without doing them), `--json`
 (machine-readable output where supported), `--confirm` (acknowledge a
@@ -235,6 +236,33 @@ required capability as Conky-markup text — poll it with `${execpi 15 umbra
 conky}`. For a hand-built layout, `umbra conky --field score` (or `active` /
 `fail` / `tor` / …) prints one value for `${execi}`, and `--plain` drops the
 colour markup. It needs no root (the audit degrades to N/A without it).
+
+## Ops HUD (always-on status bar)
+
+A thin, read-only bar you keep on screen while you work — the glanceable face of
+`umbra audit`. It shows the active posture and score, whether the **firewall** is
+up, whether traffic is going through a **VPN** tunnel, whether **Tor** is routing,
+what's **exposed** beyond loopback, and — opt-in — your **public IP** (which is the
+tunnel *exit* IP when a tunnel is up).
+
+```bash
+umbra hud                     # GTK dock bar, refreshes itself (docks to the top edge)
+umbra hud --edge bottom       # dock to the bottom instead
+umbra hud --public-ip         # also show the (exit) public IP — opt-in, contacts an external service
+```
+
+No root needed (the audit degrades to N/A without it). It reads the *active*
+profile, so the bar tracks whatever posture you flipped to from the tray.
+
+Running a tiling WM? Skip GTK and feed your own bar:
+
+```bash
+umbra hud --once              # one colourised line — for polybar / i3blocks / a terminal
+umbra --json hud              # structured segments — for a waybar custom module
+```
+
+Fetching the public IP is off by default and, when on, is throttled to ~30s, so a
+privacy tool never becomes a chatty outbound beacon.
 
 ## Platform boundary (toward the phone app)
 

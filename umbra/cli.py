@@ -11,6 +11,7 @@ Commands:
   umbra capabilities         what a platform can honestly enforce (linux/android/ios)
   umbra export-spec          write the language-neutral core spec for the mobile adapters
   umbra conky                emit posture as Conky-friendly text (desktop widget)
+  umbra hud                  always-on posture status bar (dock bar / text bar / json)
 
 Global flags: --dry-run, --json, --verbose, --confirm, --profiles-dir
 """
@@ -290,6 +291,40 @@ def cmd_conky(args, runner: Runner) -> int:
     return 0
 
 
+def cmd_hud(args, runner: Runner) -> int:
+    """Umbra's posture as an always-on status bar.
+
+    Default runs the GTK dock bar. `--once` prints a single line (for polybar /
+    i3blocks / a terminal) and `--json` prints structured segments (for a waybar
+    custom module); both exit immediately, so they're the headless-friendly faces.
+    """
+    from umbra import hud
+
+    # Headless faces: one snapshot, then exit.
+    if args.once or args.json:
+        active = snapshots.active_profile()
+        target = args.profile or active or "home"
+        report = run_audit(runner, load_profile(target, args.profiles_dir))
+        ip = hud.fetch_public_ip() if args.public_ip else None
+        segments = hud.build_segments(report, active, public_ip=ip)
+        if args.json:
+            print(hud.render_json(segments, active, report.score()))
+            return 0
+        # The line carries glyphs (● ▲ ✗); write UTF-8 bytes so a non-UTF-8
+        # console locale can't mangle them (same care as `umbra conky`).
+        text = hud.render_line(segments, color=not args.plain)
+        buf = getattr(sys.stdout, "buffer", None)
+        if buf is not None:
+            buf.write((text + "\n").encode("utf-8"))
+            buf.flush()
+        else:
+            print(text)
+        return 0
+
+    return hud.run(profile=args.profile, edge=args.edge, interval=args.interval,
+                   public_ip=args.public_ip, profiles_dir=args.profiles_dir)
+
+
 def cmd_capabilities(args, runner: Runner) -> int:
     """Print the honest per-platform enforcement matrix.
 
@@ -468,6 +503,19 @@ def build_parser() -> argparse.ArgumentParser:
                     help="print one value: profile/active/score/ok/warn/fail/info/na/tor")
     sp.add_argument("--plain", action="store_true", help="no Conky colour markup")
 
+    sp = sub.add_parser("hud", help="always-on posture status bar (dock/text/json)")
+    sp.add_argument("profile", nargs="?", default=None,
+                    help="profile to audit against (default: active profile, else home)")
+    sp.add_argument("--once", action="store_true",
+                    help="print one status line and exit (for polybar/i3blocks)")
+    sp.add_argument("--edge", choices=("top", "bottom"), default="top",
+                    help="dock the bar to the top or bottom edge (default: top)")
+    sp.add_argument("--interval", type=int, default=5,
+                    help="dock-bar refresh seconds (default: 5)")
+    sp.add_argument("--public-ip", action="store_true",
+                    help="also show public IP — contacts an external service (opt-in)")
+    sp.add_argument("--plain", action="store_true", help="no ANSI colour in --once output")
+
     sp = sub.add_parser("vpn", help="import a WireGuard config for tunnel(wireguard)")
     sp.add_argument("config", help="path to a .conf file to import")
     sp.add_argument("--name", default="vpn", help="profile_ref name to save it as (default: vpn)")
@@ -490,6 +538,7 @@ _HANDLERS = {
     "capabilities": cmd_capabilities,
     "export-spec": cmd_export_spec,
     "conky": cmd_conky,
+    "hud": cmd_hud,
 }
 
 
