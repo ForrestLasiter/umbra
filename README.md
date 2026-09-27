@@ -258,7 +258,17 @@ Running a tiling WM? Skip GTK and feed your own bar:
 
 ```bash
 umbra hud --once              # one colourised line — for polybar / i3blocks / a terminal
-umbra --json hud              # structured segments — for a waybar custom module
+umbra hud --waybar            # a waybar custom-module object (text/tooltip/class/percentage)
+umbra --json hud              # raw segments, if you want to format them yourself
+```
+
+For waybar, drop in the ready-made module and stylesheet:
+
+```bash
+# merge into ~/.config/waybar/config and add "custom/umbra" to a modules array
+cat contrib/umbra-waybar.jsonc
+# @import into ~/.config/waybar/style.css — colours the chip by worst status
+cat contrib/umbra-waybar.css
 ```
 
 Fetching the public IP is off by default and, when on, is throttled to ~30s, so a

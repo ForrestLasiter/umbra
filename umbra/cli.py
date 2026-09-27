@@ -301,12 +301,15 @@ def cmd_hud(args, runner: Runner) -> int:
     from umbra import hud
 
     # Headless faces: one snapshot, then exit.
-    if args.once or args.json:
+    if args.once or args.json or args.waybar:
         active = snapshots.active_profile()
         target = args.profile or active or "home"
         report = run_audit(runner, load_profile(target, args.profiles_dir))
         ip = hud.fetch_public_ip() if args.public_ip else None
         segments = hud.build_segments(report, active, public_ip=ip)
+        if args.waybar:
+            print(hud.render_waybar(segments, active, report.score()))
+            return 0
         if args.json:
             print(hud.render_json(segments, active, report.score()))
             return 0
@@ -508,6 +511,8 @@ def build_parser() -> argparse.ArgumentParser:
                     help="profile to audit against (default: active profile, else home)")
     sp.add_argument("--once", action="store_true",
                     help="print one status line and exit (for polybar/i3blocks)")
+    sp.add_argument("--waybar", action="store_true",
+                    help="print a waybar custom-module JSON object and exit")
     sp.add_argument("--edge", choices=("top", "bottom"), default="top",
                     help="dock the bar to the top or bottom edge (default: top)")
     sp.add_argument("--interval", type=int, default=5,

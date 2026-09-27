@@ -1,0 +1,33 @@
+/* Styling for the Umbra waybar module (contrib/umbra-waybar.jsonc).
+ *
+ * @import this from your ~/.config/waybar/style.css, or paste the rules in.
+ * The module carries a class of ok / warn / fail (loudest control wins), so the
+ * whole chip changes colour when a promised control drifts or fails. The inline
+ * per-segment colours come from Pango markup in the module text itself; these
+ * rules colour the chip's border/accent around them. */
+
+#custom-umbra {
+    padding: 0 10px;
+    margin: 0 4px;
+    border-radius: 6px;
+    background: rgba(16, 16, 18, 0.92);
+    border-bottom: 2px solid #888a85;          /* neutral until a status says otherwise */
+}
+
+#custom-umbra.ok {
+    border-bottom-color: #8ae234;
+}
+
+#custom-umbra.warn {
+    border-bottom-color: #fce94f;
+}
+
+#custom-umbra.fail {
+    border-bottom-color: #ef2929;
+    /* a failing promised control is worth a nudge */
+    animation: umbra-blink 1.5s steps(1) infinite;
+}
+
+@keyframes umbra-blink {
+    50% { background: rgba(70, 16, 16, 0.92); }
+}

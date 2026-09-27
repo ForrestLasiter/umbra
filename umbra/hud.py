@@ -166,6 +166,38 @@ def render_json(segments: list[Segment], active: str | None,
     })
 
 
+def _worst_class(segments: list[Segment]) -> str:
+    """The CSS class a waybar module should carry: the loudest status wins, so a
+    single failing control can turn the whole module red via stylesheet."""
+    statuses = {s.status for s in segments}
+    if Status.FAIL in statuses:
+        return "fail"
+    if Status.WARN in statuses:
+        return "warn"
+    return "ok"
+
+
+def render_waybar(segments: list[Segment], active: str | None,
+                  score: int | None) -> str:
+    """A waybar custom-module object: `{text, tooltip, class, percentage}`.
+
+    `text` is Pango markup (waybar renders it), `class` lets a stylesheet colour
+    the module by worst status, and `percentage` exposes the score for a bar.
+    """
+    import json
+    from html import escape
+    tooltip = "\n".join([f"umbra posture: {active or 'stock'}"]
+                        + [f"{s.label}: {s.value}" for s in segments])
+    obj = {
+        "text": render_markup(segments),
+        "tooltip": escape(tooltip),
+        "class": _worst_class(segments),
+    }
+    if score is not None:
+        obj["percentage"] = score
+    return json.dumps(obj)
+
+
 def render_markup(segments: list[Segment]) -> str:
     """Pango markup for the GTK dock bar (one label, colour per segment)."""
     from html import escape

@@ -103,6 +103,30 @@ def test_render_json_is_structured():
     assert fw["value"] == "on" and fw["status"] == "ok"
 
 
+def test_render_waybar_is_valid_module_object():
+    segs = hud.build_segments(_report(), "travel")   # has a require:tor FAIL
+    obj = json.loads(hud.render_waybar(segs, "travel", 50))
+    assert set(obj) >= {"text", "tooltip", "class", "percentage"}
+    assert "<span" in obj["text"]                     # Pango markup for waybar
+    assert obj["percentage"] == 50
+    assert obj["class"] == "fail"                     # loudest control wins
+    assert "travel" in obj["tooltip"] and "tor: off" in obj["tooltip"]
+
+
+def test_waybar_class_is_loudest_status():
+    ok = [Segment("a", "on", Status.OK), Segment("b", "n/a", Status.INFO)]
+    warn = ok + [Segment("c", "drift", Status.WARN)]
+    fail = warn + [Segment("d", "off", Status.FAIL)]
+    assert hud._worst_class(ok) == "ok"
+    assert hud._worst_class(warn) == "warn"
+    assert hud._worst_class(fail) == "fail"
+
+
+def test_waybar_omits_percentage_when_ungradeable():
+    obj = json.loads(hud.render_waybar([Segment("a", "on", Status.OK)], None, None))
+    assert "percentage" not in obj
+
+
 def test_render_markup_is_pango_and_escapes():
     markup = hud.render_markup(hud.build_segments(_report(), "travel"))
     assert "<span" in markup and "foreground=" in markup

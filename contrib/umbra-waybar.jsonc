@@ -1,0 +1,21 @@
+// Umbra posture as a waybar custom module.
+//
+// Merge this "custom/umbra" block into your ~/.config/waybar/config (and add
+// "custom/umbra" to one of the modules-left/center/right arrays), then style it
+// with contrib/umbra-waybar.css. `umbra` must be on waybar's PATH (install.sh /
+// the .deb put it in /usr/bin).
+//
+// `umbra hud --waybar` prints one JSON object per run: Pango-markup `text`, a
+// `tooltip`, a `class` (ok/warn/fail — the loudest control wins), and
+// `percentage` (the audit score). Read-only, no root. Add `--public-ip` to also
+// show the exit IP (opt-in; contacts an external service, throttled to ~30s).
+{
+    "custom/umbra": {
+        "exec": "umbra hud --waybar",
+        "return-type": "json",
+        "interval": 15,
+        "markup": "pango",
+        "tooltip": true,
+        "on-click": "umbra hud"                    // pop the full GTK dock bar
+    }
+}
