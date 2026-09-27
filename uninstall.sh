@@ -21,7 +21,12 @@ rm -f /usr/share/man/man1/umbra.1
 rm -f /usr/share/polkit-1/actions/com.forrestlasiter.umbra.policy
 rm -f /etc/NetworkManager/dispatcher.d/50-umbra
 rm -f /usr/share/applications/umbra-tray.desktop
+rm -f /usr/share/applications/umbra-hud.desktop
+rm -f /usr/lib/systemd/user/umbra-hud.service
 rm -rf /opt/umbra
+
+echo "  if you enabled the HUD autostart, turn it off as your user (not root):"
+echo "    systemctl --user disable --now umbra-hud"
 
 echo "[4/4] leaving /etc/umbra and /var/lib/umbra (config + snapshots) intact"
 echo "  remove them manually if you want a clean slate:"

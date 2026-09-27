@@ -1,0 +1,23 @@
+# Umbra Ops HUD as a systemd --user service, so the bar comes up on login and
+# restarts if it dies — no dedicated terminal needed.
+#
+#   systemctl --user enable --now umbra-hud      # start now + on every login
+#   systemctl --user disable --now umbra-hud     # stop + don't start on login
+#   systemctl --user status umbra-hud            # is it up?
+#
+# It's a --user unit (runs as you, in your desktop session), because the HUD is a
+# GUI that needs your DISPLAY/Wayland session — not a system daemon. Pass flags by
+# editing this line via `systemctl --user edit umbra-hud` (e.g. Exec ... --dock top).
+[Unit]
+Description=Umbra Ops HUD (posture status bar)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/umbra hud
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

@@ -26,6 +26,7 @@ mkdir -p "$STAGE/DEBIAN" \
          "$STAGE/usr/share/applications" \
          "$STAGE/etc/NetworkManager/dispatcher.d" \
          "$STAGE/lib/systemd/system" \
+         "$STAGE/usr/lib/systemd/user" \
          "$STAGE/etc/umbra"
 
 # code + data (profiles/ and schema/ ship inside the umbra package)
@@ -43,6 +44,8 @@ cp "$SRC/packaging/umbra.1" "$STAGE/usr/share/man/man1/umbra.1"
 cp "$SRC/packaging/com.forrestlasiter.umbra.policy" "$STAGE/usr/share/polkit-1/actions/"
 cp "$SRC/packaging/umbra-nm-dispatcher" "$STAGE/etc/NetworkManager/dispatcher.d/50-umbra"
 cp "$SRC/packaging/umbra-tray.desktop" "$STAGE/usr/share/applications/umbra-tray.desktop"
+cp "$SRC/packaging/umbra-hud.desktop" "$STAGE/usr/share/applications/umbra-hud.desktop"
+cp "$SRC/packaging/umbra-hud.service" "$STAGE/usr/lib/systemd/user/umbra-hud.service"
 cp "$SRC/packaging/umbra-boot.service" "$STAGE/lib/systemd/system/umbra-boot.service"
 echo home > "$STAGE/etc/umbra/boot-profile"
 

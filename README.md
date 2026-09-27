@@ -258,6 +258,19 @@ pins it to an edge for a bare WM with room to spare. No root needed (the audit
 degrades to N/A without it). It reads the *active* profile, so the bar tracks
 whatever posture you flipped to from the tray.
 
+**Keep it up without a terminal.** `umbra hud` holds the terminal that launched it,
+so close that terminal and the bar goes with it. Instead, run it detached — start
+it on login and let it restart itself with the shipped systemd *user* service:
+
+```bash
+systemctl --user enable --now umbra-hud      # up now + on every login
+systemctl --user disable --now umbra-hud     # stop + don't start on login
+systemctl --user edit umbra-hud              # tweak flags (e.g. add --dock top)
+```
+
+Or just click **Umbra HUD** in your app menu (a `.desktop` launcher, no terminal),
+or for a one-off from a shell you're about to close: `setsid umbra hud &`.
+
 Running a tiling WM? Skip GTK and feed your own bar:
 
 ```bash

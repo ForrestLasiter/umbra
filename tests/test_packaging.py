@@ -64,6 +64,22 @@ def test_nm_dispatcher_reapplies_active_profile_safely():
     assert "dispatcher.d/50-umbra" in _read("uninstall.sh")
 
 
+def test_hud_ships_a_launcher_and_a_restartable_user_service():
+    # The HUD must be runnable detached (no dedicated terminal): a .desktop menu
+    # launcher and a systemd --user unit that starts on login and self-restarts.
+    desktop = _read("packaging/umbra-hud.desktop")
+    assert "Exec=umbra hud" in desktop and "Terminal=false" in desktop
+    unit = _read("packaging/umbra-hud.service")
+    assert "ExecStart=/usr/bin/umbra hud" in unit
+    assert "Restart=on-failure" in unit                  # survives a crash
+    assert "WantedBy=default.target" in unit             # starts on graphical login
+    # installers ship both, and remove both
+    for f in ("install.sh", "packaging/build-deb.sh"):
+        assert "umbra-hud.desktop" in _read(f) and "umbra-hud.service" in _read(f)
+    assert "umbra-hud.desktop" in _read("uninstall.sh")
+    assert "umbra-hud.service" in _read("uninstall.sh")
+
+
 def test_installer_creates_wrapper_and_uses_pythonpath():
     sh = _read("install.sh")
     assert "/usr/local/bin/umbra" in sh

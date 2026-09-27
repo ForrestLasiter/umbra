@@ -71,10 +71,19 @@ if [ -d /etc/NetworkManager/dispatcher.d ]; then
   chmod 0755 /etc/NetworkManager/dispatcher.d/50-umbra
 fi
 
-# desktop launcher for the tray toggle
+# desktop launchers for the tray toggle and the Ops HUD (both launch detached,
+# no terminal — click them from the app menu)
 if [ -d /usr/share/applications ]; then
   cp "$SRC/packaging/umbra-tray.desktop" /usr/share/applications/umbra-tray.desktop
-  chmod 0644 /usr/share/applications/umbra-tray.desktop
+  cp "$SRC/packaging/umbra-hud.desktop" /usr/share/applications/umbra-hud.desktop
+  chmod 0644 /usr/share/applications/umbra-tray.desktop /usr/share/applications/umbra-hud.desktop
+fi
+
+# systemd --user unit so the HUD comes up on login and restarts if it dies.
+# Enable it per-user (NOT as root):  systemctl --user enable --now umbra-hud
+if [ -d /usr/lib/systemd/user ]; then
+  cp "$SRC/packaging/umbra-hud.service" /usr/lib/systemd/user/umbra-hud.service
+  chmod 0644 /usr/lib/systemd/user/umbra-hud.service
 fi
 
 echo "[4/4] boot service"
@@ -91,4 +100,5 @@ fi
 
 echo
 echo "installed. try:  umbra status home"
+echo "always-on HUD:   systemctl --user enable --now umbra-hud   (or launch 'Umbra HUD' from the menu)"
 echo "uninstall with:  sudo $SRC/uninstall.sh"

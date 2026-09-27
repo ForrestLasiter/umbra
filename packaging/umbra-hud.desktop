@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Umbra HUD
+GenericName=Privacy posture status bar
+Comment=Always-on bar: posture, firewall, VPN, Tor, exposure — at a glance
+Exec=umbra hud
+Icon=security-high
+Terminal=false
+Categories=System;Security;Monitor;
+Keywords=privacy;anonymity;vpn;tor;hardening;firewall;status;hud;
