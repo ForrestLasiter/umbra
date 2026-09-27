@@ -83,7 +83,7 @@ via `sudo` or `--pkexec` (a desktop auth dialog).
 | `umbra capabilities [--platform P] [--profile]` | what a platform (`linux`/`android`/`ios`) can honestly enforce |
 | `umbra export-spec [--out DIR]` | write the language-neutral core spec for the mobile adapters |
 | `umbra conky [profile] [--field N] [--plain]` | emit posture as Conky-friendly text for a desktop widget |
-| `umbra hud [profile] [--once] [--edge E] [--public-ip]` | always-on posture status bar (GTK dock bar, or a line/JSON for a WM bar) |
+| `umbra hud [profile] [--once] [--dock E] [--public-ip]` | always-on posture status bar (floating GTK bar, or a line/JSON for a WM bar) |
 
 **Global flags:** `--dry-run` (show mutations without doing them), `--json`
 (machine-readable output where supported), `--confirm` (acknowledge a
@@ -246,13 +246,17 @@ what's **exposed** beyond loopback, and — opt-in — your **public IP** (which
 tunnel *exit* IP when a tunnel is up).
 
 ```bash
-umbra hud                     # GTK dock bar, refreshes itself (docks to the top edge)
-umbra hud --edge bottom       # dock to the bottom instead
+umbra hud                     # a floating GTK bar — drag it by the titlebar, resize from the borders
+umbra hud --dock top          # pin it to a screen edge as a full-width strut bar instead
+umbra hud --dock bottom       # pinned along the bottom edge
 umbra hud --public-ip         # also show the (exit) public IP — opt-in, contacts an external service
 ```
 
-No root needed (the audit degrades to N/A without it). It reads the *active*
-profile, so the bar tracks whatever posture you flipped to from the tray.
+The bar floats by default (kept above, shown on every workspace) so it never
+fights a desktop panel for the screen edge — move it wherever suits you. `--dock`
+pins it to an edge for a bare WM with room to spare. No root needed (the audit
+degrades to N/A without it). It reads the *active* profile, so the bar tracks
+whatever posture you flipped to from the tray.
 
 Running a tiling WM? Skip GTK and feed your own bar:
 

@@ -324,7 +324,7 @@ def cmd_hud(args, runner: Runner) -> int:
             print(text)
         return 0
 
-    return hud.run(profile=args.profile, edge=args.edge, interval=args.interval,
+    return hud.run(profile=args.profile, dock=args.dock, interval=args.interval,
                    public_ip=args.public_ip, profiles_dir=args.profiles_dir)
 
 
@@ -513,10 +513,11 @@ def build_parser() -> argparse.ArgumentParser:
                     help="print one status line and exit (for polybar/i3blocks)")
     sp.add_argument("--waybar", action="store_true",
                     help="print a waybar custom-module JSON object and exit")
-    sp.add_argument("--edge", choices=("top", "bottom"), default="top",
-                    help="dock the bar to the top or bottom edge (default: top)")
+    sp.add_argument("--dock", choices=("top", "bottom"), default=None,
+                    help="pin the bar to a screen edge as a strut bar "
+                         "(default: a floating window you can move and resize)")
     sp.add_argument("--interval", type=int, default=5,
-                    help="dock-bar refresh seconds (default: 5)")
+                    help="GTK bar refresh seconds (default: 5)")
     sp.add_argument("--public-ip", action="store_true",
                     help="also show public IP — contacts an external service (opt-in)")
     sp.add_argument("--plain", action="store_true", help="no ANSI colour in --once output")

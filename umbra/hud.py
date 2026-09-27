@@ -229,11 +229,18 @@ def fetch_public_ip(timeout: float = 4.0) -> str | None:
         return None
 
 
-# --- GTK dock bar ------------------------------------------------------------
+# --- GTK bar -----------------------------------------------------------------
 
-def run(profile: str | None = None, edge: str = "top", interval: int = 5,
+def run(profile: str | None = None, dock: str | None = None, interval: int = 5,
         public_ip: bool = False, profiles_dir: str | None = None) -> int:
-    """Start the always-on dock bar. Returns non-zero with a hint if GTK is absent."""
+    """Start the always-on bar. Returns non-zero with a hint if GTK is absent.
+
+    Default (`dock=None`) is a **floating** window: draggable by its titlebar,
+    resizable from its borders, kept above and shown on every workspace — so you
+    can park it wherever it doesn't collide with your panel. `dock="top"` /
+    `dock="bottom"` pins it to a screen edge as a borderless strut bar instead
+    (for a bare WM with a free edge).
+    """
     try:
         import gi
         gi.require_version("Gtk", "3.0")
@@ -242,7 +249,7 @@ def run(profile: str | None = None, edge: str = "top", interval: int = 5,
         print("umbra hud needs a desktop GUI stack (PyGObject + GTK 3).")
         print("  Debian/Kali:  sudo apt install python3-gi gir1.2-gtk-3.0")
         print(f"  ({exc})")
-        print("  (headless? use  umbra hud --once  in polybar/i3blocks, or  --json  in waybar)")
+        print("  (headless? use  umbra hud --once  in polybar/i3blocks, or  --waybar  in waybar)")
         return 1
 
     from umbra import snapshots
@@ -269,49 +276,71 @@ def run(profile: str | None = None, edge: str = "top", interval: int = 5,
             ip = ip_state["ip"] or "?"
         return build_segments(report, active, public_ip=ip)
 
-    win = Gtk.Window(type=Gtk.WindowType.TOPLEVEL)
-    win.set_decorated(False)
-    win.set_resizable(False)
-    win.set_skip_taskbar_hint(True)
-    win.set_skip_pager_hint(True)
-    win.set_type_hint(Gdk.WindowTypeHint.DOCK)
-    win.set_keep_above(True)
-    win.stick()
-
-    height = 26
     display = Gdk.Display.get_default()
     monitor = display.get_primary_monitor() or display.get_monitor(0)
     geo = monitor.get_geometry()
-    win.set_default_size(geo.width, height)
-    win.move(geo.x, geo.y if edge == "top" else geo.y + geo.height - height)
+    height = 28
 
+    win = Gtk.Window(type=Gtk.WindowType.TOPLEVEL)
+    win.set_title("umbra hud")
+    win.set_keep_above(True)
+    win.stick()                                        # visible on every workspace
     win.override_background_color(
         Gtk.StateFlags.NORMAL, Gdk.RGBA(0.06, 0.06, 0.07, 0.92))
+
     label = Gtk.Label()
     label.set_halign(Gtk.Align.START)
+    label.set_valign(Gtk.Align.CENTER)
     label.set_margin_start(10)
     label.set_margin_end(10)
-    win.add(label)
 
-    def reserve_strut(*_):
-        """Best-effort: keep maximised windows from covering the bar (X11 only)."""
-        try:
-            gdk_win = win.get_window()
-            atom = Gdk.Atom.intern("_NET_WM_STRUT_PARTIAL", False)
-            card = Gdk.Atom.intern("CARDINAL", False)
-            top = height if edge == "top" else 0
-            bottom = 0 if edge == "top" else height
-            # left,right,top,bottom, then per-edge start/end spans.
-            struts = [0, 0, top, bottom,
-                      0, 0, 0, 0,
-                      geo.x if edge == "top" else 0, geo.x + geo.width - 1 if edge == "top" else 0,
-                      geo.x if edge == "bottom" else 0, geo.x + geo.width - 1 if edge == "bottom" else 0]
-            Gdk.property_change(gdk_win, atom, card, 32,
-                                Gdk.PropMode.REPLACE, struts, len(struts))
-        except Exception:
-            pass  # Wayland or a stripped Gdk: fall back to keep-above only.
+    if dock in ("top", "bottom"):
+        # Pinned strut bar: borderless, full width, reserves its edge.
+        win.set_decorated(False)
+        win.set_resizable(False)
+        win.set_skip_taskbar_hint(True)
+        win.set_skip_pager_hint(True)
+        win.set_type_hint(Gdk.WindowTypeHint.DOCK)
+        win.set_default_size(geo.width, height)
+        win.move(geo.x, geo.y if dock == "top" else geo.y + geo.height - height)
+        win.add(label)
 
-    win.connect("realize", reserve_strut)
+        def reserve_strut(*_):
+            """Best-effort: keep maximised windows from covering the bar (X11 only)."""
+            try:
+                gdk_win = win.get_window()
+                atom = Gdk.Atom.intern("_NET_WM_STRUT_PARTIAL", False)
+                card = Gdk.Atom.intern("CARDINAL", False)
+                top = height if dock == "top" else 0
+                bottom = 0 if dock == "top" else height
+                struts = [0, 0, top, bottom,
+                          0, 0, 0, 0,
+                          geo.x if dock == "top" else 0,
+                          geo.x + geo.width - 1 if dock == "top" else 0,
+                          geo.x if dock == "bottom" else 0,
+                          geo.x + geo.width - 1 if dock == "bottom" else 0]
+                Gdk.property_change(gdk_win, atom, card, 32,
+                                    Gdk.PropMode.REPLACE, struts, len(struts))
+            except Exception:
+                pass  # Wayland or a stripped Gdk: fall back to keep-above only.
+
+        win.connect("realize", reserve_strut)
+    else:
+        # Floating: a normal window you can drag (titlebar) and resize (borders).
+        win.set_decorated(True)
+        win.set_resizable(True)
+        win.set_type_hint(Gdk.WindowTypeHint.UTILITY)
+        win.set_default_size(560, height)
+        # Park it clear of a top panel; the WM may still choose its own spot.
+        win.move(geo.x + 80, geo.y + 80)
+        # Also drag from anywhere on the body, so it moves even undecorated.
+        ebox = Gtk.EventBox()
+        ebox.add(label)
+        ebox.connect(
+            "button-press-event",
+            lambda w, e: win.begin_move_drag(e.button, int(e.x_root), int(e.y_root), e.time)
+            if e.button == 1 else None)
+        win.add(ebox)
 
     def refresh():
         try:
