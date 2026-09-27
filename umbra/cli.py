@@ -456,57 +456,80 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--pkexec", action="store_true",
                    help="re-run this command as root via pkexec (desktop auth dialog) instead of sudo")
 
-    sub = p.add_subparsers(dest="command")
-    sub.add_parser("list", help="list available profiles")
+    # Global flags are defined on the top-level parser (so `umbra --json audit`
+    # works), but people naturally type them AFTER the subcommand too
+    # (`umbra apply paranoid --confirm`). Mirror them onto every subparser via a
+    # hidden parent, with SUPPRESS defaults so a flag given BEFORE the subcommand
+    # is never clobbered by the subparser's default. Result: either position works.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--dry-run", action="store_true", default=argparse.SUPPRESS,
+                        help=argparse.SUPPRESS)
+    common.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
+                        help=argparse.SUPPRESS)
+    common.add_argument("--verbose", "-v", action="store_true", default=argparse.SUPPRESS,
+                        help=argparse.SUPPRESS)
+    common.add_argument("--confirm", action="store_true", default=argparse.SUPPRESS,
+                        help=argparse.SUPPRESS)
+    common.add_argument("--profiles-dir", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
+    common.add_argument("--pkexec", action="store_true", default=argparse.SUPPRESS,
+                        help=argparse.SUPPRESS)
 
-    sp = sub.add_parser("status", help="measured posture vs a profile")
+    sub = p.add_subparsers(dest="command")
+    _add = sub.add_parser
+
+    def _sp(name, **kw):
+        return _add(name, parents=[common], **kw)
+
+    _sp("list", help="list available profiles")
+
+    sp = _sp("status", help="measured posture vs a profile")
     sp.add_argument("profile", nargs="?", help="profile to compare against (default: home)")
 
-    sp = sub.add_parser("plan", help="show actions apply would take")
+    sp = _sp("plan", help="show actions apply would take")
     sp.add_argument("profile")
 
-    sp = sub.add_parser("apply", help="reconcile the machine to a profile")
+    sp = _sp("apply", help="reconcile the machine to a profile")
     sp.add_argument("profile")
 
-    sub.add_parser("normal", help="restore to stock")
+    _sp("normal", help="restore to stock")
 
-    sp = sub.add_parser("restore", help="restore a transaction")
+    sp = _sp("restore", help="restore a transaction")
     sp.add_argument("--tx", default=None, help="transaction id (default: current)")
 
-    sp = sub.add_parser("audit", help="read-only proof of posture")
+    sp = _sp("audit", help="read-only proof of posture")
     sp.add_argument("profile", nargs="?", help="profile to audit against (default: home)")
     sp.add_argument("--html", metavar="PATH", default=None,
                     help="also write an accessible HTML posture dashboard to PATH")
 
-    sp = sub.add_parser("dashboard", help="serve a live posture dashboard on localhost")
+    sp = _sp("dashboard", help="serve a live posture dashboard on localhost")
     sp.add_argument("profile", nargs="?", help="profile to audit against (default: home)")
     sp.add_argument("--port", type=int, default=8799, help="port to bind (default: 8799)")
 
-    sp = sub.add_parser("doctor", help="check this machine is ready for a profile")
+    sp = _sp("doctor", help="check this machine is ready for a profile")
     sp.add_argument("profile", nargs="?", help="profile to check (default: home)")
 
-    sub.add_parser("panic", help="go dark now (apply the paranoid profile)")
-    sub.add_parser("tray", help="run the system-tray posture toggle (desktop)")
+    _sp("panic", help="go dark now (apply the paranoid profile)")
+    _sp("tray", help="run the system-tray posture toggle (desktop)")
 
-    sp = sub.add_parser("capabilities",
+    sp = _sp("capabilities",
                         help="what a platform can honestly enforce (Linux/Android/iOS)")
     sp.add_argument("--platform", default="linux",
                     help="linux | android | ios (default: linux)")
     sp.add_argument("--profile", nargs="?", default=None,
                     help="limit to the capabilities this profile requires")
 
-    sp = sub.add_parser("export-spec",
+    sp = _sp("export-spec",
                         help="write the language-neutral core spec (for the mobile adapters)")
     sp.add_argument("--out", default=None, help="output directory (default: ./spec)")
 
-    sp = sub.add_parser("conky", help="emit posture as Conky-friendly text")
+    sp = _sp("conky", help="emit posture as Conky-friendly text")
     sp.add_argument("profile", nargs="?", default=None,
                     help="profile to audit against (default: active profile, else home)")
     sp.add_argument("--field", default=None,
                     help="print one value: profile/active/score/ok/warn/fail/info/na/tor")
     sp.add_argument("--plain", action="store_true", help="no Conky colour markup")
 
-    sp = sub.add_parser("hud", help="always-on posture status bar (dock/text/json)")
+    sp = _sp("hud", help="always-on posture status bar (dock/text/json)")
     sp.add_argument("profile", nargs="?", default=None,
                     help="profile to audit against (default: active profile, else home)")
     sp.add_argument("--once", action="store_true",
@@ -522,7 +545,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="also show public IP — contacts an external service (opt-in)")
     sp.add_argument("--plain", action="store_true", help="no ANSI colour in --once output")
 
-    sp = sub.add_parser("vpn", help="import a WireGuard config for tunnel(wireguard)")
+    sp = _sp("vpn", help="import a WireGuard config for tunnel(wireguard)")
     sp.add_argument("config", help="path to a .conf file to import")
     sp.add_argument("--name", default="vpn", help="profile_ref name to save it as (default: vpn)")
     return p

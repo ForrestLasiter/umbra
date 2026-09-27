@@ -39,6 +39,29 @@ def test_normal_with_no_active_posture_is_a_noop(monkeypatch):
     assert rc == 0
 
 
+def test_global_flags_work_before_and_after_the_subcommand():
+    # The footgun: `umbra apply paranoid --confirm` used to error. Global flags
+    # must be accepted in either position now.
+    parse = cli.build_parser().parse_args
+    for argv in (["--confirm", "--dry-run", "apply", "paranoid"],
+                 ["apply", "paranoid", "--confirm", "--dry-run"]):
+        args = parse(argv)
+        assert args.command == "apply" and args.profile == "paranoid"
+        assert args.confirm is True and args.dry_run is True
+
+
+def test_flag_before_is_not_clobbered_by_the_subparser_default():
+    # SUPPRESS defaults on the mirrored parent mean a flag set BEFORE the
+    # subcommand survives even when not repeated after it.
+    args = cli.build_parser().parse_args(["--json", "audit", "home"])
+    assert args.json is True and args.command == "audit"
+
+
+def test_global_flag_defaults_are_false_when_absent():
+    args = cli.build_parser().parse_args(["status"])
+    assert args.confirm is False and args.dry_run is False and args.json is False
+
+
 def test_pkexec_command_strips_flag_and_prepends_pkexec():
     cmd = cli._pkexec_command(["--pkexec", "apply", "travel", "--confirm"],
                               umbra_bin="/usr/bin/umbra")
