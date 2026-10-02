@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from umbra import fsutil
+from umbra import fsutil, nftread
 from umbra.modules.base import Action, Compliance, Control, Module, VerifyResult
 
 _NFT_RULESET = """\
@@ -89,10 +89,15 @@ class NetdarkModule(Module):
         from umbra.modules.base import ControlState
 
         want_drop = self.config.get("inbound_policy", "drop") == "drop"
-        res = self.runner.run(["nft", "list", "ruleset"], read_only=True)
+        res = nftread.list_ruleset(self.runner)
         if not res.available:
             return ControlState("netdark.inbound_policy", Compliance.UNKNOWN,
                                 detail="nft not available on this host")
+        if not res.ok:
+            # Couldn't LOOK (not root, no HUD access) is not the same as "off".
+            # Reporting DRIFT here made the HUD show firewall=off while it was up.
+            return ControlState("netdark.inbound_policy", Compliance.UNKNOWN,
+                                detail=nftread.UNREADABLE_HINT)
         managed = _MARKER in res.stdout
         foreign = _has_foreign_tables(res.stdout)
         compliant = managed if want_drop else not managed
@@ -180,7 +185,7 @@ class NetdarkModule(Module):
             self._apply_units(control.split(".", 1)[1], snap)
 
     def _apply_firewall(self, snap) -> None:
-        prior = self.runner.run(["nft", "list", "ruleset"], read_only=True)
+        prior = nftread.list_ruleset(self.runner)
         snap.record("netdark.inbound_policy", "nftables_replace",
                     {"ruleset": prior.stdout if prior.available else ""})
         self.runner.run(["nft", "flush", "ruleset"], read_only=False, check=True)

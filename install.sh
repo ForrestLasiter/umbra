@@ -3,12 +3,17 @@
 #
 #   sudo ./install.sh                     # install umbra as a system command
 #   sudo ./install.sh --with-boot-service # also apply a posture at every boot
+#   sudo ./install.sh --with-hud-access   # let YOUR user read the firewall rules,
+#                                         # so the HUD shows the real firewall state
+#   (flags combine:  sudo ./install.sh --with-boot-service --with-hud-access)
 #
 # Layout it creates:
 #   /opt/umbra/{umbra,profiles,schema}    the code + data
 #   /usr/local/bin/umbra                  a thin wrapper -> python3 -m umbra.cli
 #   /etc/umbra/boot-profile               (with --with-boot-service) the profile name
 #   /etc/systemd/system/umbra-boot.service
+#   /usr/sbin/umbra-hud-access            grant/revoke HUD firewall-read access
+#   /usr/share/umbra/umbra-hud.sudoers    the rule template it installs
 set -euo pipefail
 
 PREFIX=/opt/umbra
@@ -17,7 +22,17 @@ SRC="$(cd "$(dirname "$0")" && pwd)"
 
 [ "$(id -u)" -eq 0 ] || { echo "install.sh must run as root (use sudo)"; exit 1; }
 
-echo "[1/4] dependencies"
+WITH_BOOT=0
+WITH_HUD_ACCESS=0
+for arg in "$@"; do
+  case "$arg" in
+    --with-boot-service) WITH_BOOT=1 ;;
+    --with-hud-access)   WITH_HUD_ACCESS=1 ;;
+    *) echo "unknown option: $arg"; exit 2 ;;
+  esac
+done
+
+echo "[1/5] dependencies"
 if command -v apt-get >/dev/null 2>&1; then
   apt-get update -y >/dev/null
   # Use distro packages (avoids PEP 668 'externally managed' pip friction).
@@ -26,7 +41,7 @@ else
   echo "  (no apt-get; ensure python3 + PyYAML + jsonschema + nftables are present)"
 fi
 
-echo "[2/4] install code -> $PREFIX"
+echo "[2/5] install code -> $PREFIX"
 rm -rf "$PREFIX"
 mkdir -p "$PREFIX"
 # profiles/ and schema/ ship inside the umbra package now, so this is all we copy.
@@ -37,7 +52,7 @@ find "$PREFIX" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null 
 # otherwise leave /opt/umbra root-only.
 chmod -R a+rX "$PREFIX"
 
-echo "[3/4] wrapper -> $BIN"
+echo "[3/5] wrapper -> $BIN"
 cat > "$BIN" <<EOF
 #!/bin/sh
 # umbra launcher (installed by install.sh). Absolute interpreter path.
@@ -79,6 +94,11 @@ if [ -d /usr/share/applications ]; then
   chmod 0644 /usr/share/applications/umbra-tray.desktop /usr/share/applications/umbra-hud.desktop
 fi
 
+# HUD firewall-read access helper (opt-in; does nothing until you run it)
+install -o root -g root -m 0755 "$SRC/packaging/hud-access.sh" /usr/sbin/umbra-hud-access
+mkdir -p /usr/share/umbra
+install -o root -g root -m 0644 "$SRC/packaging/umbra-hud.sudoers" /usr/share/umbra/umbra-hud.sudoers
+
 # systemd --user unit so the HUD comes up on login and restarts if it dies.
 # Enable it per-user (NOT as root):  systemctl --user enable --now umbra-hud
 if [ -d /usr/lib/systemd/user ]; then
@@ -86,8 +106,8 @@ if [ -d /usr/lib/systemd/user ]; then
   chmod 0644 /usr/lib/systemd/user/umbra-hud.service
 fi
 
-echo "[4/4] boot service"
-if [ "${1:-}" = "--with-boot-service" ]; then
+echo "[4/5] boot service"
+if [ "$WITH_BOOT" -eq 1 ]; then
   mkdir -p /etc/umbra
   [ -f /etc/umbra/boot-profile ] || echo "home" > /etc/umbra/boot-profile
   cp "$SRC/packaging/umbra-boot.service" /etc/systemd/system/umbra-boot.service
@@ -96,6 +116,14 @@ if [ "${1:-}" = "--with-boot-service" ]; then
   echo "  enabled: applies /etc/umbra/boot-profile ('$(cat /etc/umbra/boot-profile)') at boot"
 else
   echo "  skipped (pass --with-boot-service to enable go-dark-at-boot)"
+fi
+
+echo "[5/5] HUD firewall access"
+if [ "$WITH_HUD_ACCESS" -eq 1 ]; then
+  /usr/sbin/umbra-hud-access enable
+else
+  echo "  skipped (the HUD shows firewall n/a without it; enable later with:"
+  echo "           sudo umbra-hud-access enable)"
 fi
 
 echo

@@ -37,7 +37,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from umbra import fsutil
+from umbra import fsutil, nftread
 from umbra.modules.base import Action, Compliance, Control, Module, VerifyResult
 
 _WG_DIR = Path("/etc/wireguard")
@@ -238,9 +238,12 @@ class TunnelModule(Module):
     def _measure_killswitch(self) -> "ControlState":  # noqa: F821
         from umbra.modules.base import ControlState
 
-        res = self.runner.run(["nft", "list", "ruleset"], read_only=True)
+        res = nftread.list_ruleset(self.runner)
         if not res.available:
             return ControlState("tunnel.killswitch", Compliance.UNKNOWN)
+        if not res.ok:
+            return ControlState("tunnel.killswitch", Compliance.UNKNOWN,
+                                detail=nftread.UNREADABLE_HINT)
         marker = _TOR_FILTER_TABLE if self._mode() == "tor" else _EGRESS_TABLE
         present = marker in res.stdout
         return ControlState("tunnel.killswitch",

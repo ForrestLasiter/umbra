@@ -9,6 +9,8 @@
 #   /usr/share/man/man1/umbra.1              man page
 #   /lib/systemd/system/umbra-boot.service   boot service (disabled by default)
 #   /etc/umbra/boot-profile                  conffile (preserves user edits)
+#   /usr/sbin/umbra-hud-access               grant/revoke HUD firewall-read access
+#   /usr/share/umbra/umbra-hud.sudoers       the rule template it installs
 set -euo pipefail
 
 ARCH=all
@@ -21,6 +23,8 @@ STAGE="$(mktemp -d)/umbra_${VERSION}_${ARCH}"
 mkdir -p "$STAGE/DEBIAN" \
          "$STAGE/usr/lib/umbra" \
          "$STAGE/usr/bin" \
+         "$STAGE/usr/sbin" \
+         "$STAGE/usr/share/umbra" \
          "$STAGE/usr/share/man/man1" \
          "$STAGE/usr/share/polkit-1/actions" \
          "$STAGE/usr/share/applications" \
@@ -47,6 +51,8 @@ cp "$SRC/packaging/umbra-tray.desktop" "$STAGE/usr/share/applications/umbra-tray
 cp "$SRC/packaging/umbra-hud.desktop" "$STAGE/usr/share/applications/umbra-hud.desktop"
 cp "$SRC/packaging/umbra-hud.service" "$STAGE/usr/lib/systemd/user/umbra-hud.service"
 cp "$SRC/packaging/umbra-boot.service" "$STAGE/lib/systemd/system/umbra-boot.service"
+cp "$SRC/packaging/hud-access.sh" "$STAGE/usr/sbin/umbra-hud-access"
+cp "$SRC/packaging/umbra-hud.sudoers" "$STAGE/usr/share/umbra/umbra-hud.sudoers"
 echo home > "$STAGE/etc/umbra/boot-profile"
 
 cat > "$STAGE/DEBIAN/control" <<EOF
@@ -76,6 +82,9 @@ if [ -x /usr/bin/umbra ]; then
 fi
 if [ "$1" = "remove" ] || [ "$1" = "purge" ] || [ "$1" = "deconfigure" ]; then
   systemctl disable --now umbra-boot.service >/dev/null 2>&1 || true
+  # The HUD sudoers rule is created at runtime (not owned by the package), so
+  # remove it explicitly: a privilege must never outlive the tool it serves.
+  rm -f /etc/sudoers.d/umbra-hud
 fi
 exit 0
 EOF
@@ -94,7 +103,7 @@ chmod 0755 "$STAGE/DEBIAN/postinst"
 # restrictive root umask (e.g. 027 on hardened Kali) yields 0750. Set them.
 find "$STAGE" -type d -exec chmod 0755 {} +
 find "$STAGE" -type f -exec chmod 0644 {} +
-chmod 0755 "$STAGE/usr/bin/umbra" "$STAGE/DEBIAN/prerm" "$STAGE/DEBIAN/postinst" \
+chmod 0755 "$STAGE/usr/bin/umbra" "$STAGE/usr/sbin/umbra-hud-access" "$STAGE/DEBIAN/prerm" "$STAGE/DEBIAN/postinst" \
            "$STAGE/etc/NetworkManager/dispatcher.d/50-umbra"
 
 mkdir -p "$SRC/dist"

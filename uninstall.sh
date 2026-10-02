@@ -23,6 +23,10 @@ rm -f /etc/NetworkManager/dispatcher.d/50-umbra
 rm -f /usr/share/applications/umbra-tray.desktop
 rm -f /usr/share/applications/umbra-hud.desktop
 rm -f /usr/lib/systemd/user/umbra-hud.service
+rm -f /usr/sbin/umbra-hud-access /usr/share/umbra/umbra-hud.sudoers
+rmdir /usr/share/umbra 2>/dev/null || true
+# The sudoers rule grants a privilege; never leave it behind.
+rm -f /etc/sudoers.d/umbra-hud
 rm -rf /opt/umbra
 
 echo "  if you enabled the HUD autostart, turn it off as your user (not root):"

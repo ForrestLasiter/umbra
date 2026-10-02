@@ -36,6 +36,7 @@ CORE = ["profiles", "capabilities", "platform", "spec", "report", "auditmodel",
 ENFORCEMENT = {
     "umbra.engine", "umbra.snapshots", "umbra.restore", "umbra.fsutil",
     "umbra.lock", "umbra.cli", "umbra.tray", "umbra.server", "umbra.doctor",
+    "umbra.nftread",
     "umbra.audit",
     "umbra.modules.netdark", "umbra.modules.telemetry", "umbra.modules.rf",
     "umbra.modules.tunnel", "umbra.modules.kernel", "umbra.modules.identity",

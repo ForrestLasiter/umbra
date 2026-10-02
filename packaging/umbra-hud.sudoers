@@ -1,0 +1,23 @@
+# Installed by packaging/hud-access.sh as /etc/sudoers.d/umbra-hud (mode 0440).
+#
+# Lets ONE user read the live firewall rules without a password, so the HUD,
+# `umbra conky`, and `umbra status` can show the real firewall/killswitch state
+# while running as that user (a GUI must never run as root).
+#
+# Least privilege: the rule names the full command AND its arguments. sudo
+# compares them exactly, so `nft list ruleset` is allowed but `nft -f FILE`,
+# `nft flush ruleset`, or a bare `nft` (interactive) are all still refused.
+# Reading rules changes nothing.
+#
+# @UMBRA_USER@ is replaced with the real username at install time.
+
+Cmnd_Alias UMBRA_NFT_READ = /usr/sbin/nft list ruleset
+
+@UMBRA_USER@ ALL=(root) NOPASSWD: UMBRA_NFT_READ
+
+# The HUD polls every few seconds. Without these, every poll would write a
+# "sudo: ... COMMAND=/usr/sbin/nft list ruleset" line plus a PAM
+# "session opened/closed" pair to the auth log -- tens of thousands of lines a
+# day burying the entries you actually care about. Scoped to this one command
+# only; every other sudo use is still logged normally.
+Defaults!UMBRA_NFT_READ !syslog, !pam_session

@@ -222,6 +222,28 @@ umbra --help
 pytest -q
 ```
 
+## Seeing the firewall without root
+
+The kernel only lets root read firewall rules, and the HUD, `umbra conky`, and a
+plain `umbra status` run as your user (a GUI must never run as root). So by
+default those views show the firewall and killswitch as **n/a**: Umbra couldn't
+look, and it says so rather than guessing "off".
+
+To show the real state, grant your user read-only access to the rules:
+
+```bash
+sudo umbra-hud-access enable     # or at install time: sudo ./install.sh --with-hud-access
+sudo umbra-hud-access status
+sudo umbra-hud-access disable    # back to n/a
+```
+
+This installs `/etc/sudoers.d/umbra-hud`, which allows exactly one command
+without a password, `/usr/sbin/nft list ruleset`, for your user only. sudo
+matches the arguments exactly, so it can't be used to change the firewall
+(`nft flush`, `nft -f`, …) or run anything else. The file is checked with
+`visudo -cf` before it is installed, those polls are kept out of the auth log,
+and uninstalling Umbra removes the rule.
+
 ## Desktop widget (Conky)
 
 Umbra's audit is read-only and scored, which makes it a natural Conky panel:
@@ -235,7 +257,8 @@ conky -c ~/.config/conky/umbra.conkyrc
 required capability as Conky-markup text — poll it with `${execpi 15 umbra
 conky}`. For a hand-built layout, `umbra conky --field score` (or `active` /
 `fail` / `tor` / …) prints one value for `${execi}`, and `--plain` drops the
-colour markup. It needs no root (the audit degrades to N/A without it).
+colour markup. It needs no root; see [Seeing the firewall without root](#seeing-the-firewall-without-root)
+for how the firewall shows up there.
 
 ## Ops HUD (always-on status bar)
 
@@ -254,8 +277,8 @@ umbra hud --public-ip         # also show the (exit) public IP — opt-in, conta
 
 The bar floats by default (kept above, shown on every workspace) so it never
 fights a desktop panel for the screen edge — move it wherever suits you. `--dock`
-pins it to an edge for a bare WM with room to spare. No root needed (the audit
-degrades to N/A without it). It reads the *active* profile, so the bar tracks
+pins it to an edge for a bare WM with room to spare. No root needed; see
+[Seeing the firewall without root](#seeing-the-firewall-without-root). It reads the *active* profile, so the bar tracks
 whatever posture you flipped to from the tray.
 
 **Keep it up without a terminal.** `umbra hud` holds the terminal that launched it,
