@@ -115,9 +115,14 @@ class RfModule(Module):
         if not res.available:
             return ControlState(f"rf.radio_{radio}", Compliance.UNKNOWN)
         if not res.stdout.strip():
-            # No such radio on this host -> already "silent".
-            return ControlState(f"rf.radio_{radio}", Compliance.UNSUPPORTED,
-                                detail="no such radio")
+            # No such radio on this host -> nothing can transmit, so the "block
+            # this radio" promise already holds. COMPLIANT, like netdark's absent
+            # daemon ("already silent") and kernel's missing webcam driver. It was
+            # UNSUPPORTED, which the capability grader rightly treats as an
+            # unkept promise -- so a Bluetooth-less box scored 90 on paranoid and
+            # its apply was marked failed on require:bluetooth_off.
+            return ControlState(f"rf.radio_{radio}", Compliance.COMPLIANT,
+                                detail="no such radio (already silent)")
         blocked = "Soft blocked: yes" in res.stdout
         return ControlState(
             f"rf.radio_{radio}",
