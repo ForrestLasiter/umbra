@@ -1,8 +1,9 @@
 """netdark - make the machine silent and unresponsive on the local network.
 
 Controls:
-  * inbound_policy  -- replace the nftables ruleset with a default-DROP stealth
-                       firewall (no ping reply, no RST: you don't answer at all).
+  * inbound_policy  -- add Umbra's own default-DROP stealth table (no ping reply,
+                       no RST: you don't answer at all), leaving every other
+                       program's firewall rules exactly as they were.
   * ipv6_privacy    -- prefer temporary IPv6 addresses over a stable, trackable one.
   * discovery.<p>   -- silence each local-discovery protocol the profile requests:
         mdns (avahi), netbios (nmbd), ssdp_upnp (miniupnpd/minissdpd),
@@ -14,9 +15,19 @@ Honest "already silent" semantics: a protocol whose announcer isn't installed (o
 isn't running) reports COMPLIANT with a note, not a deferred placeholder - there
 is simply nothing announcing it.
 
-Caveat baked into measure(): the DROP firewall replaces the entire nftables
-ruleset. Foreign rules (e.g. Docker) are suspended while dark and restored on
-`umbra normal`; measure()/status warn when foreign tables are present.
+Coexistence, not replacement: the firewall lives in ONE table (`inet umbra`),
+installed and removed atomically. It used to `nft flush ruleset` -- destroying
+Docker's / libvirt's / ufw's rules for the whole posture (containers lost their
+networking) -- and undo had to rebuild them from a text dump, which is how
+`umbra normal` failed on netdark.inbound_policy on a real box. Undo is now just
+"delete our table".
+
+Why this is still a stealth firewall with other tables present: every base chain
+on a hook sees the packet, and a DROP in any of them is final -- another table's
+ACCEPT can't override ours. The forward chain covers the one thing the old flush
+did by accident: it drops NEW connections that were port-forwarded (DNAT) in from
+outside, so a container's published port isn't reachable while you're dark, while
+containers keep their outbound networking.
 """
 
 from __future__ import annotations
@@ -26,7 +37,11 @@ from pathlib import Path
 from umbra import fsutil, nftread
 from umbra.modules.base import Action, Compliance, Control, Module, VerifyResult
 
-_NFT_RULESET = """\
+# One atomic nft transaction: ensure the table exists, delete it, redefine it.
+# Idempotent (a re-apply replaces it cleanly) and it never touches another table.
+_NFT_TABLE = """\
+table inet umbra
+delete table inet umbra
 table inet umbra {
 	chain input {
 		type filter hook input priority filter; policy drop;
@@ -35,8 +50,13 @@ table inet umbra {
 		iif "lo" accept
 		meta l4proto ipv6-icmp accept comment "umbra:managed neighbour discovery"
 	}
+	chain forward {
+		type filter hook forward priority filter; policy accept;
+		ct state new ct status dnat drop comment "umbra:managed no published ports"
+	}
 }
 """
+_TABLE = {"family": "inet", "table": "umbra"}
 _MARKER = "umbra:managed"
 _IPV6_TEMPADDR_KEY = "net.ipv6.conf.all.use_tempaddr"
 _RESOLVED_DROPIN = Path("/etc/systemd/resolved.conf.d/umbra-llmnr.conf")
@@ -61,7 +81,7 @@ class NetdarkModule(Module):
 
     def controls(self) -> list[Control]:
         ctrls = [
-            Control("netdark.inbound_policy", "Stealth firewall (default DROP)", "nftables_replace"),
+            Control("netdark.inbound_policy", "Stealth firewall (default DROP)", "nftables_table_delete"),
             Control("netdark.ipv6_privacy", "IPv6 temporary addresses", "sysctl_set"),
         ]
         for proto in self._requested_discovery():
@@ -105,7 +125,7 @@ class NetdarkModule(Module):
             "netdark.inbound_policy",
             Compliance.COMPLIANT if compliant else Compliance.DRIFT,
             observed={"managed": managed, "foreign_tables": foreign},
-            detail="foreign nftables rules present; suspended while dark" if foreign else "",
+            detail="other firewall tables kept alongside umbra's" if foreign and managed else "",
         )
 
     def _measure_sysctl(self) -> "ControlState":  # noqa: F821
@@ -185,11 +205,10 @@ class NetdarkModule(Module):
             self._apply_units(control.split(".", 1)[1], snap)
 
     def _apply_firewall(self, snap) -> None:
-        prior = nftread.list_ruleset(self.runner)
-        snap.record("netdark.inbound_policy", "nftables_replace",
-                    {"ruleset": prior.stdout if prior.available else ""})
-        self.runner.run(["nft", "flush", "ruleset"], read_only=False, check=True)
-        self.runner.run(["nft", "-f", "-"], read_only=False, check=True, input_text=_NFT_RULESET)
+        # Stock has no `inet umbra` table, so undo is simply deleting it --
+        # nothing else's rules are touched, so nothing has to be rebuilt.
+        snap.record("netdark.inbound_policy", "nftables_table_delete", dict(_TABLE))
+        self.runner.run(["nft", "-f", "-"], read_only=False, check=True, input_text=_NFT_TABLE)
 
     def _apply_sysctl(self, snap) -> None:
         prior = self.runner.run(["sysctl", "-n", _IPV6_TEMPADDR_KEY], read_only=True)

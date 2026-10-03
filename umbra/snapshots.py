@@ -19,6 +19,7 @@ How that promise is kept:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import secrets
@@ -28,6 +29,8 @@ from pathlib import Path
 from umbra import fsutil, paths
 from umbra.restore import RESTORE_PRIMITIVES, apply_restore
 from umbra.runner import Runner
+
+log = logging.getLogger("umbra.snapshots")
 
 # A transaction id is a timestamp + short hex. Anything else (e.g. a path with
 # "/" or "..") is rejected before it can be used to build a filesystem path.
@@ -288,7 +291,10 @@ def restore_transaction(runner: Runner, tx_id: str | None = None) -> list[str]:
                 continue
             try:
                 apply_restore(runner, snap["restore_method"], snap["prior"])
-            except Exception:  # noqa: BLE001 -- best-effort, keep going
+            except Exception as exc:  # noqa: BLE001 -- best-effort, keep going
+                # Never swallow silently: this used to hide the real nft error,
+                # so `umbra normal` said only "! netdark.inbound_policy".
+                log.error("could not restore %s: %s", control, exc)
                 failed.append(control)
 
     if not runner.dry_run:
