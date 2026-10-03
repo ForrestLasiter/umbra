@@ -51,6 +51,31 @@ class _FailModule:
         return None
 
 
+class _Inert:
+    """Nothing to do. The other modules are swapped for these so a failure-path
+    test never measures or mutates the host: on Linux the real modules plan real
+    changes, and as root a fail-CLOSED profile would leave them applied."""
+
+    def __init__(self, name):
+        self.name, self.config = name, {}
+
+    def configure(self, cfg):
+        self.config = cfg or {}
+
+    def measure(self):
+        return {}
+
+    def plan(self):
+        return []
+
+
+def _engine_with_failing_telemetry(runner):
+    engine = Engine(runner)
+    engine.modules = {name: _Inert(name) for name in engine.modules}
+    engine.modules["telemetry"] = _FailModule(runner)
+    return engine
+
+
 @pytest.fixture()
 def state(tmp_path, monkeypatch):
     monkeypatch.setenv("UMBRA_STATE_DIR", str(tmp_path / "state"))
@@ -73,8 +98,7 @@ def test_already_compliant_still_records_active(state, monkeypatch):
 
 def test_verify_failure_open_profile_rolls_back(state):
     runner = Runner(dry_run=False)
-    engine = Engine(runner)
-    engine.modules["telemetry"] = _FailModule(runner)
+    engine = _engine_with_failing_telemetry(runner)
     with pytest.raises(SystemExitSafe) as ei:
         engine.apply(load_profile("home"))            # home = fail_mode open
     report = ei.value.report
@@ -84,8 +108,7 @@ def test_verify_failure_open_profile_rolls_back(state):
 
 def test_verify_failure_closed_profile_is_explicit_failed_tx(state):
     runner = Runner(dry_run=False)
-    engine = Engine(runner)
-    engine.modules["telemetry"] = _FailModule(runner)
+    engine = _engine_with_failing_telemetry(runner)
     with pytest.raises(SystemExitSafe) as ei:
         engine.apply(load_profile("paranoid"))        # closed
     report = ei.value.report

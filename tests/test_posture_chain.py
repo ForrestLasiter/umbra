@@ -169,10 +169,29 @@ class _FailingTelemetry:
         return None
 
 
+class _Inert:
+    """A module with nothing to do. Every real module is swapped for one of these
+    so the test never measures or mutates the host -- on a Linux runner the real
+    modules would plan real changes (and as root, actually make them)."""
+
+    def __init__(self, name):
+        self.name, self.config = name, {}
+
+    def configure(self, cfg):
+        self.config = cfg or {}
+
+    def measure(self):
+        return {}
+
+    def plan(self):
+        return []
+
+
 def test_failed_open_reapply_keeps_the_posture_underneath(box, monkeypatch):
     f, g = box
     first = _apply_layer("home", {g: "home-G"})
     engine = Engine(Runner(dry_run=False))
+    engine.modules = {name: _Inert(name) for name in engine.modules}
     engine.modules["telemetry"] = _FailingTelemetry(f)
     with pytest.raises(SystemExitSafe) as ei:
         engine.apply(load_profile("home"))                   # home = fail_mode open
