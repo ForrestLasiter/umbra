@@ -64,7 +64,7 @@ def run() -> int:
         menu = Gtk.Menu()
 
         active = snapshots.active_profile()
-        header = Gtk.MenuItem(label=f"Active: {active or 'stock (normal)'}")
+        header = Gtk.MenuItem(label=f"Active: {active or 'normal'}")
         header.set_sensitive(False)
         menu.append(header)
         menu.append(Gtk.SeparatorMenuItem())
@@ -75,7 +75,7 @@ def run() -> int:
             menu.append(item)
 
         menu.append(Gtk.SeparatorMenuItem())
-        restore = Gtk.MenuItem(label="Restore to stock")
+        restore = Gtk.MenuItem(label="Back to normal")
         restore.connect("activate", lambda _w: _launch("normal"))
         menu.append(restore)
 

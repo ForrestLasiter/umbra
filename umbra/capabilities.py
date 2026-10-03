@@ -71,14 +71,25 @@ def evaluate(profile, status: dict) -> list[CapResult]:
             results.append(CapResult(token, False, True,
                                      "no matching control present on this host"))
             continue
-        all_ok = all(cs.compliance is Compliance.COMPLIANT for _, cs in matched)
-        gradeable = any(cs.compliance is not Compliance.UNKNOWN for _, cs in matched)
-        if all_ok:
-            results.append(CapResult(token, True, True, "verified"))
+        # Three outcomes, in order of precedence:
+        #   * any control DRIFTED or UNSUPPORTED -> a real, gradeable failure
+        #     (an unsupported required control is a promise this host can't keep);
+        #   * otherwise any control UNKNOWN      -> can't verify: NOT graded. This
+        #     is the non-root reader case (the HUD can read Tor's config and
+        #     service but not the nft killswitch). Grading it as a failure made the
+        #     HUD show tor "off" while Tor was routing;
+        #   * otherwise everything COMPLIANT     -> verified.
+        bad = [f"{cid}={cs.compliance.value}" for cid, cs in matched
+               if cs.compliance in (Compliance.DRIFT, Compliance.UNSUPPORTED)]
+        unknown = [cid for cid, cs in matched if cs.compliance is Compliance.UNKNOWN]
+        if bad:
+            results.append(CapResult(token, False, True, "not verified: " + ", ".join(bad)))
+        elif unknown:
+            results.append(CapResult(token, False, False,
+                                     "can't verify here (no root / tool missing): "
+                                     + ", ".join(unknown)))
         else:
-            bad = [f"{cid}={cs.compliance.value}"
-                   for cid, cs in matched if cs.compliance is not Compliance.COMPLIANT]
-            results.append(CapResult(token, False, gradeable, "not verified: " + ", ".join(bad)))
+            results.append(CapResult(token, True, True, "verified"))
     return results
 
 

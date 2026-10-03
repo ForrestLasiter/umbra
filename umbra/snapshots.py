@@ -19,6 +19,7 @@ How that promise is kept:
 from __future__ import annotations
 
 import json
+import os
 import re
 import secrets
 from datetime import datetime, timezone
@@ -121,6 +122,7 @@ class Transaction:
 
     def __enter__(self) -> "Transaction":
         if not self.runner.dry_run:
+            _ensure_state_dirs()
             self.dir.mkdir(parents=True, exist_ok=True)
             self._write_status("in-progress")
         return self
@@ -170,9 +172,39 @@ class Transaction:
 
 # --- module-level helpers ----------------------------------------------------
 
+# Who may read what. The two small marker files are PUBLIC on purpose: the HUD,
+# conky, the tray, and a plain `umbra status` run as the normal user and must see
+# which posture is active. The transaction snapshots are PRIVATE: they hold copies
+# of prior /etc files (hosts, resolv.conf, NetworkManager config, the firewall).
+# Set explicitly rather than trusting the umask -- Kali's root umask is 027, and
+# mkstemp creates files 0600, which is how the marker became root-only and the
+# HUD fell back to "stock".
+_STATE_DIR_MODE = 0o755
+_MARKER_MODE = 0o644
+_TX_DIR_MODE = 0o700
+
+
+def _ensure_state_dirs() -> None:
+    """Create the state dir (readable) and the transactions dir (root-only)."""
+    sd = paths.state_dir()
+    sd.mkdir(parents=True, exist_ok=True)
+    tx = paths.transactions_dir()
+    tx.mkdir(parents=True, exist_ok=True)
+    for d, mode in ((sd, _STATE_DIR_MODE), (tx, _TX_DIR_MODE)):
+        try:
+            os.chmod(d, mode)
+        except OSError:
+            pass                        # not ours to change (dev dir, tests): fine
+
+
+def _write_marker(name: str, text: str) -> None:
+    _ensure_state_dirs()
+    fsutil.atomic_write_text(paths.state_dir() / name, text, mode=_MARKER_MODE)
+
+
 def _set_current(tx_id: str) -> None:
     """Point `state/current` at a transaction (a plain pointer file, portable)."""
-    fsutil.atomic_write_text(paths.state_dir() / "current", tx_id + "\n")
+    _write_marker("current", tx_id + "\n")
 
 
 def _clear_current() -> None:
@@ -187,12 +219,20 @@ def current_transaction_id() -> str | None:
 # --- active-profile marker (for the NetworkManager dispatcher to re-apply) ----
 
 def set_active_profile(name: str) -> None:
-    fsutil.atomic_write_text(paths.state_dir() / "active-profile", name + "\n")
+    _write_marker("active-profile", name + "\n")
 
 
 def active_profile() -> str | None:
+    """The applied posture, or None when nothing is applied (= `normal`).
+
+    An unreadable marker (an install from before the permission fix) also reads
+    as None; `sudo ./install.sh` repairs the modes on an existing box.
+    """
     p = paths.state_dir() / "active-profile"
-    return p.read_text().strip() if p.exists() else None
+    try:
+        return p.read_text().strip() or None
+    except (FileNotFoundError, PermissionError):
+        return None
 
 
 def clear_active_profile() -> None:

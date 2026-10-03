@@ -68,7 +68,7 @@ def test_absent_capabilities_read_as_neutral_not_failed():
     checks = [Check("route", "Default route", "tunnel", Status.INFO, "default dev eth0"),
               Check("exposure", "Listening TCP sockets", "exposure", Status.OK, "quiet")]
     segs = hud.build_segments(AuditReport("home", "t", checks=checks, required=[]), active=None)
-    assert _by_label(segs, "umbra").value == "stock"
+    assert _by_label(segs, "umbra").value == "normal"   # nothing applied = normal, never "stock"
     assert _by_label(segs, "fw").value == "n/a" and _by_label(segs, "fw").status is Status.INFO
     assert _by_label(segs, "tor").value == "off" and _by_label(segs, "tor").status is Status.INFO
     assert _by_label(segs, "vpn").value == "off"

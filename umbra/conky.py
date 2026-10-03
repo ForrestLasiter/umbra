@@ -62,7 +62,7 @@ def render_block(report: AuditReport, active: str | None, color: bool = True) ->
 
     header = (
         _c(_ACCENT, "◐ umbra", color)
-        + "  " + _c(_DIM, "posture", color) + " " + (active or "none")
+        + "  " + _c(_DIM, "posture", color) + " " + (active or "normal")
         + "  " + _c(_DIM, "score", color) + " " + _c(_score_color(score), score_str, color)
     )
     lines = [header]
@@ -89,7 +89,7 @@ def field(report: AuditReport, active: str | None, name: str) -> str:
     if name == "profile":
         return report.profile
     if name == "active":
-        return active or "none"
+        return active or "normal"
     if name == "score":
         return "" if score is None else str(score)
     if name in counts:                      # ok / warn / fail / info / na

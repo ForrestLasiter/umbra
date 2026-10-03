@@ -106,6 +106,18 @@ if [ -d /usr/lib/systemd/user ]; then
   chmod 0644 /usr/lib/systemd/user/umbra-hud.service
 fi
 
+# State dir: the posture marker must be readable by the desktop user (the HUD,
+# conky and the tray run unprivileged), while transaction snapshots -- copies of
+# prior /etc files -- stay root-only. Older installs wrote the marker 0600 and the
+# dir 0750 (Kali's root umask is 027), so the HUD fell back to "stock"; this
+# repairs an existing box in place without re-applying a profile.
+mkdir -p /var/lib/umbra/transactions
+chmod 0755 /var/lib/umbra
+chmod 0700 /var/lib/umbra/transactions
+for f in active-profile current; do
+  if [ -f "/var/lib/umbra/$f" ]; then chmod 0644 "/var/lib/umbra/$f"; fi
+done
+
 echo "[4/5] boot service"
 if [ "$WITH_BOOT" -eq 1 ]; then
   mkdir -p /etc/umbra

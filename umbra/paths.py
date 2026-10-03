@@ -36,8 +36,15 @@ def state_dir() -> Path:
     if override:
         return Path(override)
     system = Path("/var/lib/umbra")
-    if system.parent.exists() and os.access(system.parent, os.W_OK):
+    # Readers (the HUD, conky, the tray, a plain `umbra status`) run as the
+    # normal user and can never WRITE /var/lib -- but they must still READ the
+    # state root wrote there. Checking only "is /var/lib writable?" sent every
+    # non-root reader to an empty dev folder, so the HUD said "stock" while the
+    # machine was in paranoid. Existence is what matters for reading.
+    if system.is_dir():
         return system
+    if system.parent.exists() and os.access(system.parent, os.W_OK):
+        return system                   # root, first run: we'll create it
     return _REPO_ROOT / "engine" / "state"
 
 

@@ -47,7 +47,7 @@ def test_score_field_and_counts():
     assert conky.field(r, "home", "score") == "50"     # 1 of 2 required verified
     assert conky.field(r, "home", "profile") == "home"
     assert conky.field(r, "travel", "active") == "travel"
-    assert conky.field(r, None, "active") == "none"
+    assert conky.field(r, None, "active") == "normal"     # nothing applied = normal
     assert conky.field(r, "home", "ok") == "2"         # firewall + exposure
     assert conky.field(r, "home", "fail") == "1"
     assert conky.field(r, "home", "tor") == "fail"

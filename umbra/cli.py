@@ -2,7 +2,7 @@
 
 Commands:
   umbra list                 list available profiles
-  umbra status [profile]     measured posture vs. a profile (default: home)
+  umbra status [profile]     measured posture vs. a profile (default: the active profile, else home)
   umbra plan  <profile>      dry-run: show the actions apply would take
   umbra apply <profile>      reconcile the machine to a profile
   umbra normal               restore to stock (apply the `normal` profile)
@@ -40,6 +40,17 @@ _GLYPH = {
     Compliance.UNKNOWN.value: "? ",
     Compliance.UNSUPPORTED.value: ".. ",
 }
+
+
+def _target_profile(args, fallback: str = "home") -> str:
+    """The profile a command acts on when none is named: the ACTIVE posture.
+
+    Auditing `home` while the machine is in paranoid made `umbra audit` (and the
+    HUD) report the wrong promises. Interactive commands fall back to `home` when
+    nothing is applied (useful: "what would home fix?"); the always-on faces pass
+    fallback="normal" so their label and their audit agree.
+    """
+    return args.profile or snapshots.active_profile() or fallback
 
 
 def _is_linux() -> bool:
@@ -119,7 +130,7 @@ def cmd_list(args, runner: Runner) -> int:
 
 
 def cmd_status(args, runner: Runner) -> int:
-    profile = load_profile(args.profile or "home", args.profiles_dir)
+    profile = load_profile(_target_profile(args), args.profiles_dir)
     report = Engine(runner).status(profile)
     if args.json:
         out = {
@@ -228,7 +239,7 @@ def cmd_audit(args, runner: Runner) -> int:
     from dataclasses import asdict
     from umbra.report import render_html
 
-    profile = load_profile(args.profile or "home", args.profiles_dir)
+    profile = load_profile(_target_profile(args), args.profiles_dir)
     report = run_audit(runner, profile)
 
     if args.html:
@@ -258,7 +269,7 @@ def cmd_dashboard(args, runner: Runner) -> int:
     from umbra.server import serve
     # Read-only; degrades to N/A without root, so no privilege gate. Blocks until
     # Ctrl-C.
-    serve(args.profile or "home", args.port, runner)
+    serve(_target_profile(args), args.port, runner)
     return 0
 
 
@@ -267,7 +278,7 @@ def cmd_conky(args, runner: Runner) -> int:
     from umbra import conky
 
     active = snapshots.active_profile()
-    target = args.profile or active or "home"
+    target = _target_profile(args, fallback="normal")
     profile = load_profile(target, args.profiles_dir)
     report = run_audit(runner, profile)
 
@@ -303,7 +314,7 @@ def cmd_hud(args, runner: Runner) -> int:
     # Headless faces: one snapshot, then exit.
     if args.once or args.json or args.waybar:
         active = snapshots.active_profile()
-        target = args.profile or active or "home"
+        target = _target_profile(args, fallback="normal")
         report = run_audit(runner, load_profile(target, args.profiles_dir))
         ip = hud.fetch_public_ip() if args.public_ip else None
         segments = hud.build_segments(report, active, public_ip=ip)
@@ -388,7 +399,7 @@ def cmd_tray(args, runner: Runner) -> int:
 
 def cmd_doctor(args, runner: Runner) -> int:
     from umbra.doctor import run_doctor
-    profile = load_profile(args.profile or "home", args.profiles_dir)
+    profile = load_profile(_target_profile(args), args.profiles_dir)
     report = run_doctor(runner, profile)
     print(f"readiness for '{profile.name}':\n")
     for c in report.checks:
@@ -483,7 +494,7 @@ def build_parser() -> argparse.ArgumentParser:
     _sp("list", help="list available profiles")
 
     sp = _sp("status", help="measured posture vs a profile")
-    sp.add_argument("profile", nargs="?", help="profile to compare against (default: home)")
+    sp.add_argument("profile", nargs="?", help="profile to compare against (default: the active profile, else home)")
 
     sp = _sp("plan", help="show actions apply would take")
     sp.add_argument("profile")
@@ -497,16 +508,16 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--tx", default=None, help="transaction id (default: current)")
 
     sp = _sp("audit", help="read-only proof of posture")
-    sp.add_argument("profile", nargs="?", help="profile to audit against (default: home)")
+    sp.add_argument("profile", nargs="?", help="profile to audit against (default: the active profile, else home)")
     sp.add_argument("--html", metavar="PATH", default=None,
                     help="also write an accessible HTML posture dashboard to PATH")
 
     sp = _sp("dashboard", help="serve a live posture dashboard on localhost")
-    sp.add_argument("profile", nargs="?", help="profile to audit against (default: home)")
+    sp.add_argument("profile", nargs="?", help="profile to audit against (default: the active profile, else home)")
     sp.add_argument("--port", type=int, default=8799, help="port to bind (default: 8799)")
 
     sp = _sp("doctor", help="check this machine is ready for a profile")
-    sp.add_argument("profile", nargs="?", help="profile to check (default: home)")
+    sp.add_argument("profile", nargs="?", help="profile to check (default: the active profile, else home)")
 
     _sp("panic", help="go dark now (apply the paranoid profile)")
     _sp("tray", help="run the system-tray posture toggle (desktop)")
@@ -524,14 +535,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = _sp("conky", help="emit posture as Conky-friendly text")
     sp.add_argument("profile", nargs="?", default=None,
-                    help="profile to audit against (default: active profile, else home)")
+                    help="profile to audit against (default: the active profile, else normal)")
     sp.add_argument("--field", default=None,
                     help="print one value: profile/active/score/ok/warn/fail/info/na/tor")
     sp.add_argument("--plain", action="store_true", help="no Conky colour markup")
 
     sp = _sp("hud", help="always-on posture status bar (dock/text/json)")
     sp.add_argument("profile", nargs="?", default=None,
-                    help="profile to audit against (default: active profile, else home)")
+                    help="profile to audit against (default: the active profile, else normal)")
     sp.add_argument("--once", action="store_true",
                     help="print one status line and exit (for polybar/i3blocks)")
     sp.add_argument("--waybar", action="store_true",

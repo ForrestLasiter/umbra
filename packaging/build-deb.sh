@@ -95,6 +95,13 @@ cat > "$STAGE/DEBIAN/postinst" <<'EOF'
 set -e
 systemctl daemon-reload >/dev/null 2>&1 || true
 command -v mandb >/dev/null 2>&1 && mandb -q >/dev/null 2>&1 || true
+# Posture marker readable by the desktop user (HUD/conky/tray); snapshots root-only.
+mkdir -p /var/lib/umbra/transactions
+chmod 0755 /var/lib/umbra
+chmod 0700 /var/lib/umbra/transactions
+for f in active-profile current; do
+  if [ -f "/var/lib/umbra/$f" ]; then chmod 0644 "/var/lib/umbra/$f"; fi
+done
 exit 0
 EOF
 chmod 0755 "$STAGE/DEBIAN/postinst"

@@ -100,10 +100,17 @@ def _vpn_segment(report: AuditReport) -> Segment:
 
 
 def _tor_segment(report: AuditReport) -> Segment:
+    """Tor routing. Absent = this profile doesn't route through Tor (off, neutral).
+    NA = it does, but this reader can't verify it (e.g. the nft killswitch needs
+    root and HUD access isn't enabled) -- say n/a, never claim "off"."""
     c = _check(report, "require:tor")
     if c is None:
         return Segment("tor", "off", Status.INFO)
-    return Segment("tor", "on" if c.status is Status.OK else "off", c.status)
+    if c.status is Status.OK:
+        return Segment("tor", "on", Status.OK)
+    if c.status in (Status.NA, Status.INFO):
+        return Segment("tor", "n/a", Status.NA)
+    return Segment("tor", "off", c.status)
 
 
 def _exposure_segment(report: AuditReport) -> Segment:
@@ -129,7 +136,8 @@ def build_segments(report: AuditReport, active: str | None,
     """
     score = report.score()
     segs = [
-        Segment("umbra", active or "stock", Status.OK if active else Status.INFO),
+        # No marker = nothing applied = the `normal` profile (never "stock").
+        Segment("umbra", active or "normal", Status.OK if active else Status.INFO),
         Segment("score", "n/a" if score is None else f"{score}", _score_status(score)),
         _cap_segment(report, "fw", "firewall"),
         _vpn_segment(report),
@@ -186,7 +194,7 @@ def render_waybar(segments: list[Segment], active: str | None,
     """
     import json
     from html import escape
-    tooltip = "\n".join([f"umbra posture: {active or 'stock'}"]
+    tooltip = "\n".join([f"umbra posture: {active or 'normal'}"]
                         + [f"{s.label}: {s.value}" for s in segments])
     obj = {
         "text": render_markup(segments),
@@ -266,7 +274,8 @@ def run(profile: str | None = None, dock: str | None = None, interval: int = 5,
 
     def current_segments():
         active = snapshots.active_profile()
-        target = profile or active or "home"
+        # Audit what the label says: the active profile (or `normal` when none).
+        target = profile or active or "normal"
         report = run_audit(runner, load_profile(target, profiles_dir))
         ip = None
         if public_ip:
