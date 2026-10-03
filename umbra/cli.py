@@ -184,6 +184,26 @@ def cmd_apply(args, runner: Runner) -> int:
         print("preview with:  umbra plan", profile.name)
         return 2
 
+    # Pre-flight: refuse BEFORE touching anything if the profile can't succeed.
+    # Without this, travel with no WireGuard config applied 7 controls, then
+    # failed on the tunnel -- and being fail-closed, left them in place. Runs
+    # before a profile switch unwinds the current posture, so a refusal leaves
+    # you exactly where you were. `umbra panic` opts out: in an emergency, raising
+    # whatever walls are possible beats refusing.
+    if getattr(args, "preflight", True):
+        from umbra.doctor import run_doctor
+        missing = [c for c in run_doctor(runner, profile).checks
+                   if not c.ok and not c.optional and not c.needs_root]
+        if missing:
+            verb = "would fail" if runner.dry_run else "can't be applied yet"
+            print(f"'{profile.name}' {verb} -- this machine is missing:")
+            for c in missing:
+                print(f"  ! {c.name}: {c.detail}")
+            if not runner.dry_run:
+                print("nothing was changed.  details:  sudo umbra doctor", profile.name)
+                return 2
+            print("(dry run continues so you can preview the rest)\n")
+
     try:
         report = Engine(runner).apply(profile)
     except SystemExitSafe as safe:
@@ -422,7 +442,10 @@ def cmd_doctor(args, runner: Runner) -> int:
 def cmd_panic(args, runner: Runner) -> int:
     """Slam straight to the paranoid posture (go dark now)."""
     print("PANIC — going dark (applying paranoid)...")
-    ns = argparse.Namespace(profile="paranoid", profiles_dir=args.profiles_dir, confirm=True)
+    # No pre-flight: in an emergency, raise every wall that CAN go up rather than
+    # refusing because one piece (say, tor) is missing. The report says what didn't.
+    ns = argparse.Namespace(profile="paranoid", profiles_dir=args.profiles_dir,
+                            confirm=True, preflight=False)
     return cmd_apply(ns, runner)
 
 
