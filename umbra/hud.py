@@ -93,6 +93,8 @@ def _vpn_segment(report: AuditReport) -> Segment:
     req = _check(report, "require:wireguard")
     if req is not None and req.status is Status.FAIL:
         return Segment("vpn", "down", Status.FAIL)
+    if req is not None and req.status is Status.OK:
+        return Segment("vpn", "up", Status.OK)       # route + killswitch verified
     route = _check(report, "route")
     if route is not None and route.status is Status.OK:
         return Segment("vpn", "up", Status.OK)

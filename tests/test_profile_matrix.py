@@ -40,25 +40,36 @@ _NFT_CONTROLS = {"netdark.inbound_policy", "tunnel.killswitch"}
 
 
 class _ProbeRunner:
-    """Answers the audit's independent probes (ss / ip route) for a posture."""
+    """Answers the audit's independent probes (ss / ip route get / ip link) the
+    way real Kali does in that posture -- including wg-quick's policy routing,
+    where the main table's default route still says wlan0 and the tunnel
+    interface is named after the config (`vpn`), not `wg*`."""
     dry_run = False
 
-    def __init__(self, default_route: str):
-        self.default_route = default_route
+    def __init__(self, egress: str):
+        self.egress = egress
 
     def run(self, argv, read_only=True, **_):
         if argv[:1] == ["ss"]:
             return RunResult(argv, 0, "", "", True, True)                # nothing listening
-        if argv[:2] == ["ip", "route"]:
-            return RunResult(argv, 0, self.default_route + "\n", "", True, True)
+        if argv[:3] == ["ip", "route", "get"]:
+            return RunResult(argv, 0, self.egress + "\n    cache\n", "", True, True)
+        if argv[:2] == ["ip", "-d"] and argv[-1] == "vpn":
+            return RunResult(argv, 0, "5: vpn: <POINTOPOINT,NOARP,UP,LOWER_UP> mtu 1420 "
+                             "link/none  promiscuity 0 wireguard addrgenmode none", "", True, True)
+        if argv[:2] == ["ip", "-d"]:
+            return RunResult(argv, 0, "2: wlan0: <BROADCAST,UP> mtu 1500 link/ether "
+                             "aa:bb:cc:dd:ee:ff promiscuity 0", "", True, True)
+        if argv[:3] == ["ip", "route", "show"]:                   # the old probe's view
+            return RunResult(argv, 0, "default via 192.168.1.1 dev wlan0\n", "", True, True)
         return RunResult(argv, 127, "", "", False, False)
 
 
 def _route_for(profile: str) -> str:
-    # WireGuard is a real route; Tor's transparent proxy is NAT, not a route.
+    # WireGuard is a real (policy) route; Tor's transparent proxy is NAT, not a route.
     if profile == "travel":
-        return "default dev wg-vpn scope link"
-    return "default via 192.168.1.1 dev wlan0 proto dhcp"
+        return "1.1.1.1 dev vpn table 51820 src 10.66.0.2 uid 1000"
+    return "1.1.1.1 via 192.168.1.1 dev wlan0 src 192.168.1.50 uid 1000"
 
 
 def _applied_status(profile, nft_readable: bool) -> dict:

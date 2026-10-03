@@ -81,15 +81,45 @@ def _probe_listening(runner: Runner) -> Check:
                  "reachable: " + ", ".join(sorted(set(public))))
 
 
+# Where the kernel would actually send a packet to the internet. `ip route get`
+# follows policy-routing rules -- which is how wg-quick routes everything through
+# the tunnel (its own table + an ip rule) while the MAIN table's default route
+# still says eth0. Reading `ip route show default` (and matching "wg" in the
+# interface name -- ours is called `vpn`) made the HUD say vpn=off while
+# WireGuard was carrying every packet. Both commands work unprivileged.
+_PROBE_DST = "1.1.1.1"
+
+
+def _route_dev(stdout: str) -> str | None:
+    toks = stdout.split()
+    return toks[toks.index("dev") + 1] if "dev" in toks[:-1] else None
+
+
+def _tunnel_kind(runner: Runner, dev: str) -> str | None:
+    """'wireguard' / 'tun' when `dev` is a tunnel device (by link type, not name)."""
+    res = runner.run(["ip", "-d", "-o", "link", "show", "dev", dev], read_only=True)
+    out = res.stdout if res.ok else ""
+    if " wireguard " in f" {out} ":
+        return "wireguard"
+    if " tun " in f" {out} " or "link/none" in out:
+        return "tun"
+    return None
+
+
 def _probe_default_route(runner: Runner) -> Check:
-    res = runner.run(["ip", "route", "show", "default"], read_only=True)
+    title = "Egress route"
+    res = runner.run(["ip", "route", "get", _PROBE_DST], read_only=True)
     if not res.available:
-        return Check("route", "Default route", "tunnel", Status.NA, "ip unavailable")
-    route = res.stdout.strip().splitlines()[0] if res.stdout.strip() else ""
-    if any(dev in route for dev in ("wg", "tun", "tor")):
-        return Check("route", "Default route", "tunnel", Status.OK, f"via tunnel: {route}")
-    return Check("route", "Default route", "tunnel", Status.INFO,
-                 f"default route: {route or 'none'}")
+        return Check("route", title, "tunnel", Status.NA, "ip unavailable")
+    dev = _route_dev(res.stdout) if res.ok else None
+    if dev is None:
+        return Check("route", title, "tunnel", Status.INFO, "no route to the internet")
+    kind = _tunnel_kind(runner, dev)
+    if kind:
+        return Check("route", title, "tunnel", Status.OK, f"egress via {dev} ({kind} tunnel)")
+    # Tor's transparent proxy is NAT, not a route: paranoid egresses the physical
+    # interface and the Tor capability check (not this probe) proves the redirect.
+    return Check("route", title, "tunnel", Status.INFO, f"egress via {dev} (no tunnel)")
 
 
 def _probe_dns_resolvers(runner: Runner) -> Check:
