@@ -14,13 +14,13 @@ from umbra import cli
 from umbra.runner import Runner
 
 
-def test_normal_restores_the_current_transaction(monkeypatch):
+def test_normal_unwinds_the_whole_posture_chain(monkeypatch):
     calls = {}
 
     monkeypatch.setattr(cli.snapshots, "current_transaction_id", lambda: "tx-123")
 
-    def fake_restore(self, tx_id=None):
-        calls["restored"] = tx_id
+    def fake_restore(self, *args, **kwargs):
+        calls["restored"] = (args, kwargs)
         return []                      # no failures
 
     monkeypatch.setattr(cli.Engine, "restore", fake_restore)
@@ -30,7 +30,9 @@ def test_normal_restores_the_current_transaction(monkeypatch):
 
     rc = cli.cmd_normal(argparse.Namespace(), Runner(dry_run=True))
     assert rc == 0
-    assert calls["restored"] == "tx-123"
+    # No id = unwind EVERY layer back to stock. Restoring only "tx-123" was the
+    # bug: after a dispatcher re-apply, normal left the first layer in place.
+    assert calls["restored"] == ((), {})
 
 
 def test_normal_with_no_active_posture_is_a_noop(monkeypatch):

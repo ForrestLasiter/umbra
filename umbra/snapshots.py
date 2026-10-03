@@ -124,6 +124,12 @@ class Transaction:
         if not self.runner.dry_run:
             _ensure_state_dirs()
             self.dir.mkdir(parents=True, exist_ok=True)
+            # Link to the posture that was live when we started. Undoing this
+            # transaction returns the machine to THAT state -- not to stock -- so
+            # `umbra normal` must walk the whole chain (see restore_chain).
+            parent = current_transaction_id()
+            if parent:
+                fsutil.atomic_write_text(self.dir / "parent", parent + "\n")
             self._write_status("in-progress")
         return self
 
@@ -292,6 +298,67 @@ def restore_transaction(runner: Runner, tx_id: str | None = None) -> list[str]:
             fsutil.atomic_write_text(tx_dir / "status", "restore-failed\n")
         else:
             fsutil.atomic_write_text(tx_dir / "status", "restored\n")
-            _clear_current()            # this posture is fully undone
-            clear_active_profile()      # back to stock: nothing to re-apply
+            if current_transaction_id() == tx_id:
+                # Step the pointer back to the posture this one was layered on.
+                # Only when nothing is left is the machine back at stock. (This
+                # used to clear unconditionally, orphaning the earlier posture:
+                # `normal` after a re-apply left most of the first one in place.)
+                parent = _live_parent(tx_id)
+                if parent:
+                    _set_current(parent)
+                else:
+                    _clear_current()
+                    clear_active_profile()
     return failed
+
+
+def _parent_of(tx_id: str) -> str | None:
+    p = paths.transactions_dir() / tx_id / "parent"
+    try:
+        parent = p.read_text().strip()
+    except FileNotFoundError:
+        return None
+    return parent if parent and _valid_tx_id(parent) else None
+
+
+def _live_parent(tx_id: str) -> str | None:
+    """The nearest ancestor still applied (skip any already restored by hand)."""
+    seen = {tx_id}
+    parent = _parent_of(tx_id)
+    while parent and parent not in seen:
+        seen.add(parent)
+        status_f = paths.transactions_dir() / parent / "status"
+        status = status_f.read_text().strip() if status_f.exists() else ""
+        if status != "restored":
+            return parent
+        parent = _parent_of(parent)
+    return None
+
+
+def restore_chain(runner: Runner) -> list[str]:
+    """Undo EVERY applied transaction, newest first, back to stock.
+
+    A posture can be several transactions deep: the NetworkManager dispatcher
+    re-applies on each link-up, and each re-apply that fixed drift is its own
+    transaction layered on the last. Undoing only the newest left the rest of the
+    posture in place while the marker said "normal". Stops at the first failure
+    (pointer left on it, so a retry resumes exactly there).
+    """
+    if runner.dry_run:
+        # Nothing moves in a dry run; walk the links to preview every layer.
+        failed: list[str] = []
+        tx = current_transaction_id()
+        seen: set[str] = set()
+        while tx and tx not in seen:
+            seen.add(tx)
+            failed += restore_transaction(runner, tx)
+            tx = _live_parent(tx)
+        return failed
+
+    seen = set()
+    while (tx := current_transaction_id()) is not None and tx not in seen:
+        seen.add(tx)
+        failed = restore_transaction(runner, tx)
+        if failed:
+            return failed
+    return []

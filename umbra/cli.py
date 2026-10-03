@@ -208,13 +208,13 @@ def cmd_normal(args, runner: Runner) -> int:
     if tx is None:
         print("nothing to restore; no active umbra posture.")
         return 0
-    failed = Engine(runner).restore(tx)
+    failed = Engine(runner).restore()      # unwind every layer, newest first
     if failed:
         print("restore completed with failures:")
         for control in failed:
             print("  !", control)
         return 1
-    print(f"restored to stock (undid tx {tx}).")
+    print(f"restored to normal (unwound tx {tx} and every layer beneath it).")
     return 0
 
 
@@ -444,6 +444,8 @@ def _print_apply(report, dry_run: bool) -> None:
     print(f"{tag}apply '{report.profile}' (tx {report.transaction_id or '-'}):")
     if report.recovered:
         print(f"  recovered crashed transactions: {', '.join(report.recovered)}")
+    if report.switched_from:
+        print(f"  switched from {report.switched_from}: restored to normal first")
     print(f"  applied:  {len(report.applied)}")
     print(f"  verified: {len(report.verified)}")
     if report.failed:
