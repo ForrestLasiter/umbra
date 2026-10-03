@@ -139,8 +139,10 @@ class Engine:
         except Exception as exc:  # noqa: BLE001
             tx.mark_failed()
             if not isinstance(exc, _ApplyFailed):
-                log.error("apply failed: %s", exc)
-                report.failed.append(f"<exception: {exc}>")
+                # The report carries the message to the user (printed once, as
+                # readable lines); logging it too printed it twice.
+                log.debug("apply failed: %s", exc)
+                report.failed.append(str(exc))
             if profile.fail_mode == "open":
                 # Favour connectivity: undo this transaction entirely.
                 snapshots.restore_transaction(self.runner, tx.id)

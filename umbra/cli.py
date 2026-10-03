@@ -403,12 +403,19 @@ def cmd_doctor(args, runner: Runner) -> int:
     report = run_doctor(runner, profile)
     print(f"readiness for '{profile.name}':\n")
     for c in report.checks:
-        mark = "OK " if c.ok else ("?? " if c.optional else "XX ")
-        opt = " (optional)" if c.optional else ""
-        print(f"  {mark} {c.name}{opt}")
+        mark = "OK " if c.ok else ("?? " if (c.optional or c.needs_root) else "XX ")
+        tag = " (needs sudo)" if c.needs_root else (" (optional)" if c.optional else "")
+        print(f"  {mark} {c.name}{tag}")
         if not c.ok or c.detail:
             print(f"        {c.detail}")
-    print(f"\n  {'READY' if report.ready else 'NOT READY — install the missing pieces above'}")
+    if not report.ready:
+        print("\n  NOT READY — install the missing pieces above")
+    elif report.unverified:
+        # Don't say READY when part of the answer was invisible to this user.
+        print(f"\n  READY SO FAR — {', '.join(report.unverified)} can only be checked "
+              f"as root:  sudo umbra doctor {profile.name}")
+    else:
+        print("\n  READY")
     return 0 if report.ready else 1
 
 
@@ -433,9 +440,16 @@ def cmd_vpn(args, runner: Runner) -> int:
         print(f"umbra: no such file: {src}", file=sys.stderr)
         return 2
     _require_privilege(dry_run=False)
+    from umbra.doctor import _DNS_LINE
+    text = src.read_text()
     dest = Path("/etc/wireguard") / f"{name}.conf"
-    fsutil.atomic_write_text(dest, src.read_text(), mode=0o600)
+    fsutil.atomic_write_text(dest, text, mode=0o600)
     print(f"imported {src} -> {dest} (referenced as profile_ref: {name})")
+    # Catch the #1 reason `apply travel` then fails, at the moment it's easy to fix.
+    if _DNS_LINE.search(text) and not runner.which("resolvconf"):
+        print("warning: this config has a `DNS =` line, and wg-quick needs resolvconf to "
+              "apply it.\n         Install it before `umbra apply travel`:  "
+              "sudo apt install openresolv")
     return 0
 
 
@@ -449,7 +463,14 @@ def _print_apply(report, dry_run: bool) -> None:
     print(f"  applied:  {len(report.applied)}")
     print(f"  verified: {len(report.verified)}")
     if report.failed:
-        print(f"  FAILED:   {report.failed}")
+        # One entry per line, multi-line messages indented -- not a Python list
+        # repr with literal backslash-n escapes in it.
+        print("  FAILED:")
+        for item in report.failed:
+            first, *rest = str(item).splitlines() or [""]
+            print(f"    ! {first}")
+            for line in rest:
+                print(f"      {line}")
     if report.restored:
         print("  rolled back (fail-mode=open).")
     if not dry_run and report.transaction_id:

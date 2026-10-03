@@ -7,11 +7,18 @@ mid-apply. Read-only; safe to run anytime, anywhere.
 
 from __future__ import annotations
 
+import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from umbra.profiles import Profile
 from umbra.runner import Runner
+
+# Where wg-quick reads configs (root-only, 0700 -- a plain `umbra doctor` can't
+# look inside). Module-level so tests can point it at a temp dir.
+_WG_DIR = Path("/etc/wireguard")
+_DNS_LINE = re.compile(r"^\s*DNS\s*=", re.MULTILINE | re.IGNORECASE)
 
 
 @dataclass
@@ -20,6 +27,7 @@ class DoctorCheck:
     ok: bool
     detail: str = ""
     optional: bool = False
+    needs_root: bool = False    # couldn't check as this user -- neither pass nor fail
 
 
 @dataclass
@@ -29,7 +37,12 @@ class DoctorReport:
 
     @property
     def ready(self) -> bool:
-        return all(c.ok for c in self.checks if not c.optional)
+        return all(c.ok for c in self.checks if not c.optional and not c.needs_root)
+
+    @property
+    def unverified(self) -> list[str]:
+        """Checks that need `sudo umbra doctor` to see (e.g. root-only /etc/wireguard)."""
+        return [c.name for c in self.checks if c.needs_root]
 
 
 def run_doctor(runner: Runner, profile: Profile) -> DoctorReport:
@@ -61,11 +74,24 @@ def run_doctor(runner: Runner, profile: Profile) -> DoctorReport:
         if mode == "wireguard":
             tool("wg-quick", "the WireGuard tunnel")
             ref = tun.get("profile_ref", "vpn")
-            conf = Path(f"/etc/wireguard/{ref}.conf")
-            report.checks.append(DoctorCheck(
-                f"wireguard config ({ref})", conf.exists(),
-                str(conf) if conf.exists() else
-                f"missing {conf} - drop your WireGuard config there"))
+            conf = _WG_DIR / f"{ref}.conf"
+            name = f"wireguard config ({ref})"
+            if _WG_DIR.exists() and not os.access(_WG_DIR, os.R_OK | os.X_OK):
+                # Can't look as a normal user -- say so, never a false "missing".
+                report.checks.append(DoctorCheck(
+                    name, False, f"{_WG_DIR} is root-only; check it with:  "
+                    f"sudo umbra doctor {profile.name}", needs_root=True))
+            elif not conf.exists():
+                report.checks.append(DoctorCheck(
+                    name, False, f"missing {conf} - import yours:  sudo umbra vpn <file.conf>"))
+            else:
+                report.checks.append(DoctorCheck(name, True, str(conf)))
+                # Every commercial VPN config carries a DNS line; wg-quick needs
+                # resolvconf to apply it, and Kali doesn't ship one. Without this
+                # check, `apply travel` failed with only "see journalctl".
+                if _DNS_LINE.search(conf.read_text(errors="replace")):
+                    tool("resolvconf", "the `DNS =` line in your WireGuard config "
+                         "(install:  sudo apt install openresolv)")
         elif mode == "tor":
             tool("tor", "the Tor transparent proxy")
 

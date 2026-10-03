@@ -64,6 +64,40 @@ _RESOLV = Path("/etc/resolv.conf")
 _RESOLV_CONTENT = "# Managed by umbra (tor mode). Restored by `umbra normal`.\nnameserver 127.0.0.1\noptions edns0 trust-ad\n"
 
 
+# Known wg-quick / tor start failures -> what to actually do about them. Matched
+# against the unit's journal. Order matters: the most specific first.
+_UNIT_FAILURES: list[tuple[tuple[str, ...], str]] = [
+    (("resolvconf: command not found", "resolvconf: not found"),
+     "Your WireGuard config has a `DNS =` line, and wg-quick needs `resolvconf` to "
+     "apply it -- Kali doesn't ship one. Install it:  sudo apt install openresolv\n"
+     "(Don't delete the DNS line instead: lookups would then go to the local "
+     "network's resolver, outside the tunnel.)"),
+    (("does not exist", "No such file or directory"),
+     "There's no WireGuard config to start. Import yours:  sudo umbra vpn <file.conf>"),
+    (("Name or service not known", "Temporary failure in name resolution",
+      "Failed to resolve"),
+     "The Endpoint hostname in your WireGuard config doesn't resolve. Check you're "
+     "online, or use the server's IP address as the Endpoint."),
+    (("RTNETLINK answers: File exists", "already exists"),
+     "A WireGuard interface or route from an earlier run is still up. Clear it:  "
+     "sudo wg-quick down <name>  (or reboot), then apply again."),
+    (("Key is not the correct length", "Line unrecognized", "Configuration parsing error"),
+     "The WireGuard config is malformed (a bad key or line). Re-export it from your "
+     "VPN provider and import it again with  sudo umbra vpn <file.conf>"),
+]
+
+
+def diagnose_unit_failure(unit: str, journal: str) -> str:
+    """Turn a failed `systemctl start` into a message that says what to do."""
+    lines = [l for l in journal.splitlines() if l.strip()]
+    for needles, advice in _UNIT_FAILURES:
+        hit = next((l for l in lines if any(n in l for n in needles)), None)
+        if hit:
+            return f"{unit} failed to start: {hit.strip()}\n{advice}"
+    tail = "\n".join(f"  {l}" for l in lines[-8:]) or "  (no journal output)"
+    return f"{unit} failed to start. Last log lines:\n{tail}"
+
+
 def _endpoint_from_conf(conf_text: str) -> tuple[str, str] | None:
     """Parse `Endpoint = host:port` from a WireGuard config. Pure/testable."""
     match = re.search(r"^\s*Endpoint\s*=\s*([^:\s]+):(\d+)", conf_text, re.MULTILINE)
@@ -308,11 +342,16 @@ class TunnelModule(Module):
             "was_active": active.stdout.strip() == "active",
         })
         self.runner.run(["systemctl", "enable", unit], read_only=False)
-        if self._mode() == "tor":
-            # restart so tor loads the TransPort/DNSPort we just wrote to torrc
-            self.runner.run(["systemctl", "restart", unit], read_only=False, check=True)
-        else:
-            self.runner.run(["systemctl", "start", unit], read_only=False, check=True)
+        # restart (tor) so it loads the TransPort/DNSPort we just wrote to torrc
+        verb = "restart" if self._mode() == "tor" else "start"
+        try:
+            self.runner.run(["systemctl", verb, unit], read_only=False, check=True)
+        except RuntimeError:
+            # systemctl only says "see journalctl"; read it ourselves and turn the
+            # usual causes into a fix the user can act on.
+            log = self.runner.run(["journalctl", "-u", unit, "-n", "25", "--no-pager",
+                                   "-o", "cat"], read_only=True)
+            raise RuntimeError(diagnose_unit_failure(unit, log.stdout)) from None
 
     def _apply_wg_killswitch(self, snap) -> None:
         endpoint = self._resolve_endpoint()
