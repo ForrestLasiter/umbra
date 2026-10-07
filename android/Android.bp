@@ -1,0 +1,72 @@
+// Builds Umbra INSIDE an Android OS source tree (AOSP / LineageOS and friends),
+// as an app signed with that OS's platform key. This is the `android_system`
+// platform from the core spec.
+//
+// The normal app is built by Gradle (build.gradle.kts) and is unaffected by this
+// file. Both builds compile the SAME sources; this one differs only in:
+//   - certificate: "platform"  -> the OS grants the signature-level permissions
+//     the system controls need (see app/.../system/SystemMode.kt);
+//   - one swapped file: the WireGuard backend (see exclude_srcs below).
+//
+// To include it in an OS build: check this repository out anywhere in the tree
+// (e.g. packages/apps/Umbra) and add `Umbra` to PRODUCT_PACKAGES.
+
+// Gradle takes the package name from `namespace` in build.gradle.kts, so the
+// source manifest has no package attribute. The platform build needs one, so add
+// it here rather than keeping a second copy of the manifest that could drift.
+genrule {
+    name: "UmbraPlatformManifest",
+    srcs: ["app/src/main/AndroidManifest.xml"],
+    out: ["AndroidManifest.xml"],
+    cmd: "sed 's/<manifest /<manifest package=\"com.forrestlasiter.umbra\" /' $(in) > $(out)",
+}
+
+android_app {
+    name: "Umbra",
+    manifest: ":UmbraPlatformManifest",
+
+    srcs: [
+        "app/src/main/java/**/*.kt",
+        "platform/src/**/*.kt",
+    ],
+    // The Gradle build pulls the WireGuard userspace library from Maven. An OS
+    // tree has no such library, so the platform build swaps in
+    // platform/src/.../wg/WireGuardBackend.kt, which reports that honestly
+    // instead of tunnelling.
+    exclude_srcs: ["app/src/main/java/com/forrestlasiter/umbra/wg/WireGuardBackend.kt"],
+
+    resource_dirs: ["app/src/main/res"],
+    asset_dirs: ["app/src/main/assets"],
+
+    static_libs: [
+        "androidx.activity_activity-compose",
+        "androidx.compose.foundation_foundation",
+        "androidx.compose.material3_material3",
+        "androidx.compose.runtime_runtime",
+        "androidx.compose.ui_ui",
+        "androidx.core_core-ktx",
+        "androidx.lifecycle_lifecycle-runtime-compose",
+        "androidx.lifecycle_lifecycle-runtime-ktx",
+        "androidx.lifecycle_lifecycle-viewmodel-compose",
+        "kotlinx-coroutines-android",
+        "kotlinx_serialization_json",
+    ],
+    kotlin_plugins: ["kotlin-serialize-compiler-plugin"],
+
+    // Public SDK only -- the same limit the Gradle build has. System-only calls
+    // go through reflection (see system/Controls.kt), which is what lets one
+    // source tree serve both builds.
+    sdk_version: "current",
+    min_sdk_version: "26",
+    target_sdk_version: "34",
+
+    // Platform-signed, but NOT privileged: every permission the controls use is
+    // granted by signature alone, so the app does not need priv-app status or a
+    // privileged-permission allowlist.
+    certificate: "platform",
+    system_ext_specific: true,
+
+    optimize: {
+        enabled: false,
+    },
+}

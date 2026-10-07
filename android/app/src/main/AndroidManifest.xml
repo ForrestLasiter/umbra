@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- The tunnel is how an unrooted phone enforces anything on the wire:
          telemetry sinkholing, WireGuard, and Tor all ride VPNService. -->
@@ -8,6 +9,20 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Read-only posture checks (advisory capabilities) -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- System-build only. These are signature-level: on a normal install the OS
+         never grants them, and the app plans against the plain `android` platform.
+         They are granted only when Umbra is built into an OS and signed with its
+         platform key (see system/SystemMode). The lint check is silenced because
+         "an ordinary app cannot hold these" is exactly the point. -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.NETWORK_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.BLUETOOTH_PRIVILEGED"
+        tools:ignore="ProtectedPermissions" />
+    <!-- Runtime permission; an OS build pre-grants it. Needed to switch the radio. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
     <application
         android:allowBackup="false"
@@ -23,6 +38,31 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Quick Settings tile. BIND_QUICK_SETTINGS_TILE means only the system
+             can bind it. -->
+        <service
+            android:name=".tile.PostureTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_umbra"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- Apply a profile from `adb shell` (testing/automation). Exported, so it
+             is guarded by DUMP: the shell and the system hold it, ordinary apps
+             cannot. See PostureCommandReceiver. -->
+        <receiver
+            android:name=".system.PostureCommandReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="com.forrestlasiter.umbra.action.APPLY_POSTURE" />
+            </intent-filter>
+        </receiver>
 
         <!-- The VPNService the OS binds when the user consents. BIND_VPN_SERVICE
              is granted to the system, not requested by us. -->

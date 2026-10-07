@@ -74,8 +74,13 @@ data class CoreSpec(
     @SerialName("telemetry_blocklists") val telemetryBlocklists: Map<String, List<String>> = emptyMap(),
     val profiles: Map<String, ProfileSpec> = emptyMap(),
 ) {
-    /** The enforcement level THIS platform (android) can promise for a capability. */
-    fun support(capability: String, platform: String = "android"): PlatformCapability =
+    /**
+     * The enforcement level a platform can promise for a capability. The app is
+     * `android` when installed normally and `android_system` when it is built into
+     * the OS as a privileged app (see system/SystemMode) -- same code, two rows of
+     * the matrix.
+     */
+    fun support(capability: String, platform: String = PLATFORM_ANDROID): PlatformCapability =
         platforms[platform]?.capabilities?.get(capability)
             ?: PlatformCapability("unavailable", "capability not in spec")
 
@@ -86,6 +91,10 @@ data class CoreSpec(
     }
 
     companion object {
+        /** Platform keys in the spec's `platforms` map. Mirrors umbra.platform.Platform. */
+        const val PLATFORM_ANDROID = "android"
+        const val PLATFORM_ANDROID_SYSTEM = "android_system"
+
         private val json = Json { ignoreUnknownKeys = true }
 
         fun parse(text: String): CoreSpec = json.decodeFromString(text)

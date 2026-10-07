@@ -14,6 +14,8 @@ consume exactly the same source of truth as the Linux reference.
     core (this file, capabilities.py, profiles, audit model)
       -> linux agent  : enforces everything (the reference implementation)
       -> android app  : VPNService — routes/DNS/tunnel enforced, kernel needs root
+      -> android (system) : the same app built INTO a custom Android OS as a
+                         privileged app — adds the system-only controls
       -> ios app       : Network Extension — DNS/tunnel via entitlement, most advisory
 """
 
@@ -29,6 +31,7 @@ from umbra.capabilities import ALL_CAPABILITIES
 class Platform(str, Enum):
     LINUX = "linux"      # the reference implementation; full control
     ANDROID = "android"  # VPNService + app permissions; no root assumed
+    ANDROID_SYSTEM = "android_system"  # same app, shipped inside a custom Android OS as a privileged system app
     IOS = "ios"          # Network Extension; the most sandboxed
 
 
@@ -112,6 +115,25 @@ CAPABILITY_SUPPORT: dict[Platform, dict[str, tuple[Enforcement, str]]] = {
         "wireguard":    (_E.REQUIRES_ENTITLEMENT, "WireGuard via NEVPNManager with the Network Extension entitlement"),
         "tor":          (_E.REQUIRES_VPN_PROFILE, "route through Tor via a Packet Tunnel Provider"),
     },
+}
+
+# The Android app can also be built into a custom Android OS and signed with that
+# OS's platform key. Then it is no longer a sandboxed guest: it holds
+# signature-level permissions an ordinary app can never get, so some promises the
+# plain `android` row can only make as "advisory" become real.
+#
+# The rule that keeps this honest: a capability is listed here ONLY once the app
+# has a working system control for it (android/.../system/). Everything not
+# listed is inherited unchanged from the `android` row -- so this matrix never
+# advertises a control that does not exist yet. It grows one slice at a time.
+_ANDROID_SYSTEM_OVERRIDES: dict[str, tuple[Enforcement, str]] = {
+    "hostname":     (_E.ENFORCED, "sets the Wi-Fi restriction that stops the device name being sent over DHCP, on open and secured networks"),
+    "mac":          (_E.ENFORCED, "forces a fresh random Wi-Fi MAC per connection on every network that randomizes (Android's default)"),
+    "bluetooth_off":(_E.ENFORCED, "turns the Bluetooth radio off with the privileged adapter API"),
+}
+CAPABILITY_SUPPORT[Platform.ANDROID_SYSTEM] = {
+    **CAPABILITY_SUPPORT[Platform.ANDROID],
+    **_ANDROID_SYSTEM_OVERRIDES,
 }
 
 

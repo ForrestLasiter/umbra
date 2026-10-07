@@ -70,6 +70,7 @@
       "required": [
         "linux",
         "android",
+        "android_system",
         "ios"
       ],
       "additionalProperties": {

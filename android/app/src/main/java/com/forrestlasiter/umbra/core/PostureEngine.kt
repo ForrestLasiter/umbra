@@ -40,11 +40,15 @@ data class PosturePlan(
 
 object PostureEngine {
 
-    fun plan(spec: CoreSpec, profileName: String): PosturePlan {
+    fun plan(
+        spec: CoreSpec,
+        profileName: String,
+        platform: String = CoreSpec.PLATFORM_ANDROID,
+    ): PosturePlan {
         val profile = spec.profiles[profileName]
             ?: return PosturePlan(profileName, emptyList())
         val items = profile.requires.map { cap ->
-            val support = spec.support(cap)
+            val support = spec.support(cap, platform)
             val level = support.enforcement
             PostureItem(
                 capability = cap,

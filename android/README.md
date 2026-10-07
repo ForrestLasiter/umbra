@@ -41,11 +41,64 @@ android/
     wg/        WgConfig, WgConfigStore, WireGuardBackend      (WireGuard: import + tunnel)
     tor/       OrbotHelper                                    (Tor via Orbot)
     vpn/       UmbraVpnService, TunnelController, TunnelMode   (sinkhole svc + datapath select)
+    system/    SystemMode, SystemControl, Controls,           (OS-build controls: snapshot,
+               PostureApplier, SnapshotStore, SystemPosture    enforce, restore)
+    tile/      PostureTileService                             (Quick Settings tile)
     ui/        MainActivity.kt, PostureViewModel.kt           (Compose front-end)
   app/src/main/assets/umbra-core.json                        (copy of the core contract)
   app/src/test/...  PostureEngineTest, DnsMessageTest,        (pure-JVM tests)
                     TelemetryBlocklistTest, Ipv4UdpTest
 ```
+
+## Built into an OS (`android_system`)
+
+The same app can be compiled into an Android OS build (AOSP, LineageOS, ...) and
+signed with that OS's platform key. It then holds signature-level permissions an
+ordinary app can never get, and plans against a second row of the core matrix,
+`android_system`, where some "advisory" promises become real:
+
+| Capability | Ordinary install | Built into the OS |
+|---|---|---|
+| mac | advisory | **enforced** - forces a fresh random Wi-Fi MAC per connection |
+| hostname | advisory | **enforced** - stops the device name being sent over DHCP |
+| bluetooth_off | advisory | **enforced** - turns the radio off, restores it afterwards |
+| everything else | as above | unchanged until its system control is written |
+
+The matrix only lists a capability as enforced once its control exists, so this
+table grows one control at a time and never runs ahead of the code.
+
+How it fits together:
+
+- `system/SystemMode` decides which row applies by checking whether the system
+  permissions were actually granted. One missing permission means "ordinary app".
+- `system/SystemControl` is the contract every control keeps: `snapshot`,
+  `enforce`, `restore`. `system/Controls.kt` holds the three implementations.
+- `system/PostureApplier` reconciles the controls to a profile. It stores each
+  control's prior state **before** changing it and restores only from that
+  record, so `normal` returns the phone to exactly how it was - the same
+  snapshot-before-mutate rule as the Linux engine.
+- `tile/PostureTileService` is the Quick Settings tile. On an OS build it lists
+  the profiles and applies the one you pick; on an ordinary install it opens the app.
+- `system/PostureCommandReceiver` applies a profile from `adb shell`, for testing:
+
+  ```bash
+  adb shell am broadcast -n com.forrestlasiter.umbra/.system.PostureCommandReceiver       -a com.forrestlasiter.umbra.action.APPLY_POSTURE --es profile travel
+  ```
+
+To build it into an OS, check this repository out inside the source tree (for
+example at `packages/apps/Umbra`) and add `Umbra` to `PRODUCT_PACKAGES`;
+[`Android.bp`](Android.bp) does the rest. The OS should also pre-grant the
+`BLUETOOTH_CONNECT` runtime permission (a `default-permissions` XML), or the
+Bluetooth control will report a failure instead of switching the radio.
+
+Two honest limits of the OS build today:
+
+- It has **no WireGuard tunnel**. The userspace library the normal app uses comes
+  from Maven and is not in an OS tree, so `platform/src/.../wg/WireGuardBackend.kt`
+  replaces it and reports "not available". That one file is the only source the
+  two builds do not share, and the only code CI's Gradle job does not compile.
+- The system controls are verified on an emulator/device, not in CI. Their logic
+  (`PostureApplier`, `SystemMode`) is unit-tested with fakes.
 
 ## How the DNS sinkhole works
 

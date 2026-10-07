@@ -54,6 +54,7 @@ _ENFORCEMENT_DESCRIPTIONS: dict[Enforcement, str] = {
 _PLATFORM_DESCRIPTIONS: dict[Platform, str] = {
     Platform.LINUX: "Reference implementation. Enforces every control directly (nftables, systemd, sysctl, rfkill, Tor).",
     Platform.ANDROID: "VPNService-based. Real egress/DNS/tunnel control without root; kernel and system firewall need root.",
+    Platform.ANDROID_SYSTEM: "The Android app built into a custom Android OS as a privileged, platform-signed system app. Everything `android` can do, plus the system-only controls that build has wired up.",
     Platform.IOS: "Network Extension-based. DNS and the tunnel via an entitlement; nearly everything else is advisory.",
 }
 
@@ -150,7 +151,7 @@ def build_schema() -> dict:
             },
             "platforms": {
                 "type": "object",
-                "required": ["linux", "android", "ios"],
+                "required": ["linux", "android", "android_system", "ios"],
                 "additionalProperties": {
                     "type": "object",
                     "required": ["description", "capabilities"],

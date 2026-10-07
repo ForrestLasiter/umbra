@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Umbra</string>
+
+    <!-- Quick Settings tile -->
+    <string name="tile_label">Umbra</string>
+    <string name="tile_choose_posture">Choose a posture</string>
+    <string name="tile_content_description">Umbra posture: %1$s</string>
 </resources>

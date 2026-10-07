@@ -6,6 +6,9 @@ import com.forrestlasiter.umbra.core.CoreSpec
 import com.forrestlasiter.umbra.core.PosturePlan
 import com.forrestlasiter.umbra.core.PostureEngine
 import com.forrestlasiter.umbra.core.SpecRepository
+import com.forrestlasiter.umbra.system.PostureApplier
+import com.forrestlasiter.umbra.system.SystemMode
+import com.forrestlasiter.umbra.system.SystemPosture
 import com.forrestlasiter.umbra.wg.WgConfig
 import com.forrestlasiter.umbra.wg.WgConfigError
 import com.forrestlasiter.umbra.wg.WgConfigStore
@@ -19,6 +22,8 @@ data class PostureUiState(
     val selected: String = "travel",
     val plan: PosturePlan? = null,
     val active: Boolean = false,
+    // True when Umbra is built into the OS and holds its system permissions.
+    val systemBuild: Boolean = false,
     val wgConfigured: Boolean = false,
     val wgEndpoint: String? = null,
     val message: String? = null,
@@ -32,6 +37,10 @@ data class PostureUiState(
 class PostureViewModel(app: Application) : AndroidViewModel(app) {
 
     private val store = WgConfigStore(app)
+
+    // Decided once: which row of the spec's platform matrix this install plans
+    // against ("android", or "android_system" when built into the OS).
+    private val platform = SystemMode.platform(app)
     private val _state = MutableStateFlow(PostureUiState())
     val state: StateFlow<PostureUiState> = _state.asStateFlow()
 
@@ -41,12 +50,18 @@ class PostureViewModel(app: Application) : AndroidViewModel(app) {
         try {
             val spec = SpecRepository(getApplication()).load()
             val names = spec.profiles.keys.filter { it != "normal" }.sorted()
-            val selected = names.firstOrNull { it == "travel" } ?: names.firstOrNull() ?: "travel"
+            // On a system build the tile may already have applied a posture, so
+            // open on that one and show it as active.
+            val held = SystemPosture.activeProfile(getApplication())
+            val selected = names.firstOrNull { it == held }
+                ?: names.firstOrNull { it == "travel" } ?: names.firstOrNull() ?: "travel"
             _state.value = PostureUiState(
                 spec = spec,
                 profileNames = names,
                 selected = selected,
-                plan = PostureEngine.plan(spec, selected),
+                plan = PostureEngine.plan(spec, selected, platform),
+                active = held != PostureApplier.NORMAL,
+                systemBuild = SystemMode.isSystemBuild(getApplication()),
                 wgConfigured = store.exists(),
                 wgEndpoint = store.summary()?.endpoint,
             )
@@ -59,7 +74,7 @@ class PostureViewModel(app: Application) : AndroidViewModel(app) {
         val spec = _state.value.spec ?: return
         _state.value = _state.value.copy(
             selected = profile,
-            plan = PostureEngine.plan(spec, profile),
+            plan = PostureEngine.plan(spec, profile, platform),
             message = null,
         )
     }

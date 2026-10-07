@@ -22,6 +22,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.forrestlasiter.umbra.core.Enforcement
 import com.forrestlasiter.umbra.core.PlannedAction
 import com.forrestlasiter.umbra.core.PostureItem
+import com.forrestlasiter.umbra.system.PostureApplier
+import com.forrestlasiter.umbra.system.SystemPosture
 import com.forrestlasiter.umbra.tor.OrbotHelper
 import com.forrestlasiter.umbra.vpn.SinkholeStats
 import com.forrestlasiter.umbra.vpn.TunnelController
@@ -73,7 +75,11 @@ class MainActivity : ComponentActivity() {
 
         fun deactivate() {
             state.plan?.let { tunnels.deactivate(it) }
+            // System build: put back every setting the posture changed. A no-op
+            // (returns null) on a normal install.
+            val restored = SystemPosture.apply(this, PostureApplier.NORMAL)
             vm.setActive(false)
+            if (restored != null) vm.setMessage(SystemPosture.summarize(PostureApplier.NORMAL, restored))
         }
 
         Column(
@@ -148,9 +154,19 @@ class MainActivity : ComponentActivity() {
 
     private fun startEnforcement(state: PostureUiState) {
         val plan = state.plan ?: return
+        // System controls first (they need no consent and cannot half-start),
+        // then the tunnel. On a normal install `system` is null and only the
+        // tunnel runs, exactly as before.
+        val system = SystemPosture.apply(this, state.selected)
+        val systemNote = system?.let { SystemPosture.summarize(state.selected, it) }
         val error = tunnels.activate(state.selected, plan)
-        if (error == null) { vm.setActive(true); vm.setMessage("Enforcing ${state.selected}.") }
-        else vm.setMessage(error)
+        when {
+            error == null -> { vm.setActive(true); vm.setMessage(systemNote ?: "Enforcing ${state.selected}.") }
+            // The tunnel failed but system controls are holding: say both, and
+            // stay "active" so Deactivate is offered and restores them.
+            system != null -> { vm.setActive(true); vm.setMessage("$systemNote Tunnel: $error") }
+            else -> vm.setMessage(error)
+        }
     }
 
     @Composable

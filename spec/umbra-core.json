@@ -201,6 +201,55 @@
         }
       }
     },
+    "android_system": {
+      "description": "The Android app built into a custom Android OS as a privileged, platform-signed system app. Everything `android` can do, plus the system-only controls that build has wired up.",
+      "capabilities": {
+        "bluetooth_off": {
+          "level": "enforced",
+          "reason": "turns the Bluetooth radio off with the privileged adapter API"
+        },
+        "discovery": {
+          "level": "advisory",
+          "reason": "system owns mDNS/NSD; an app cannot silence it without root"
+        },
+        "firewall": {
+          "level": "requires_rooted_os",
+          "reason": "a system inbound firewall needs root; unrooted Android already sandboxes inbound per-app"
+        },
+        "hostname": {
+          "level": "enforced",
+          "reason": "sets the Wi-Fi restriction that stops the device name being sent over DHCP, on open and secured networks"
+        },
+        "ipv6_privacy": {
+          "level": "advisory",
+          "reason": "Android enables IPv6 privacy addresses by default; not app-toggleable"
+        },
+        "kernel": {
+          "level": "requires_rooted_os",
+          "reason": "sysctl hardening requires root / a custom ROM"
+        },
+        "mac": {
+          "level": "enforced",
+          "reason": "forces a fresh random Wi-Fi MAC per connection on every network that randomizes (Android's default)"
+        },
+        "telemetry": {
+          "level": "requires_vpn_profile",
+          "reason": "sinkhole telemetry domains via a local VPNService DNS filter"
+        },
+        "tor": {
+          "level": "requires_vpn_profile",
+          "reason": "route all traffic through Tor via a VPNService packet tunnel"
+        },
+        "webcam_off": {
+          "level": "advisory",
+          "reason": "no module unload; guide to the OS camera kill-switch / permission revoke"
+        },
+        "wireguard": {
+          "level": "requires_entitlement",
+          "reason": "native WireGuard over VPNService after a one-time VPN-consent grant"
+        }
+      }
+    },
     "ios": {
       "description": "Network Extension-based. DNS and the tunnel via an entitlement; nearly everything else is advisory.",
       "capabilities": {

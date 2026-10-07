@@ -29,7 +29,7 @@ def test_linux_reference_enforces_everything():
 
 def test_phones_do_not_pretend_full_enforcement():
     # The whole point: a phone must be honest about what it cannot do.
-    for p in (Platform.ANDROID, Platform.IOS):
+    for p in (Platform.ANDROID, Platform.ANDROID_SYSTEM, Platform.IOS):
         levels = {r.level for r in plat.matrix(p)}
         assert levels != {Enforcement.ENFORCED}, f"{p.value} claims full enforcement"
 
@@ -61,3 +61,22 @@ def test_actionable_excludes_only_advisory_and_unavailable():
 
 def test_current_platform_is_a_platform():
     assert isinstance(plat.current_platform(), Platform)
+
+
+def test_android_system_only_ever_strengthens_android():
+    # A system build is the SAME app with more privilege, so it can never promise
+    # less than the sandboxed app does. And anything it does not override must be
+    # inherited unchanged -- that is what stops the matrix advertising a system
+    # control that has not been written yet.
+    base = plat.CAPABILITY_SUPPORT[Platform.ANDROID]
+    system = plat.CAPABILITY_SUPPORT[Platform.ANDROID_SYSTEM]
+    for cap in ALL_CAPABILITIES:
+        if cap in plat._ANDROID_SYSTEM_OVERRIDES:
+            assert system[cap][0] is Enforcement.ENFORCED, f"{cap}: an override must be a real control"
+            assert base[cap][0] is not Enforcement.ENFORCED, f"{cap}: nothing to override"
+        else:
+            assert system[cap] == base[cap], f"{cap}: changed without a system control"
+
+
+def test_android_system_overrides_are_known_capabilities():
+    assert set(plat._ANDROID_SYSTEM_OVERRIDES) <= set(ALL_CAPABILITIES)
