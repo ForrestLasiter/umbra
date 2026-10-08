@@ -1,5 +1,0 @@
-# What Umbra wants from the packet filter (written by the app, read by umbra-net).
-system_internal_prop(umbra_net_prop)
-
-# What is actually in place (written by umbra-net, read by the app).
-system_internal_prop(umbra_net_status_prop)

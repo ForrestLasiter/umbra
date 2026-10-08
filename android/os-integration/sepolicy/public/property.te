@@ -1,0 +1,9 @@
+# These two properties cross the system/vendor boundary (a system app writes the
+# request, a vendor service reads it and writes the status), so they are public
+# property types, declared here where vendor policy can see them.
+
+# What Umbra wants from the packet filter (written by the app, read by umbra-net).
+system_public_prop(umbra_net_prop)
+
+# What is actually in place (written by umbra-net, read by the app).
+system_public_prop(umbra_net_status_prop)

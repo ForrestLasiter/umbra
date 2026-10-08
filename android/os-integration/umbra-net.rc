@@ -2,9 +2,10 @@
 # again whenever netd (re)starts, because netd rebuilds its chains from scratch.
 #
 # NET_ADMIN and NET_RAW are the two capabilities iptables needs; the service has
-# no others even though it runs as root.
+# no others even though it runs as root. It is a vendor service because only
+# vendor code may use Android's iptables wrapper (see umbra-net.sh).
 
-service umbra-net /system_ext/bin/umbra-net
+service umbra-net /vendor/bin/umbra-net
     class main
     user root
     group root

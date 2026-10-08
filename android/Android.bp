@@ -29,7 +29,7 @@ sh_binary {
     src: "os-integration/umbra-net.sh",
     filename: "umbra-net",
     init_rc: ["os-integration/umbra-net.rc"],
-    system_ext_specific: true,
+    vendor: true,
 }
 
 android_app {

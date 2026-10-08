@@ -27,15 +27,15 @@ exist.
 ## What the rules are
 
 `netd` owns the filter table but leaves empty chains for the OS builder,
-`oem_in` and `oem_out`. The service adds one jump from each into its own chains
-and only ever flushes those.
+`oem_in` and `oem_out`. The service adds one jump from each into its own chains,
+`oem_umbra_in` and `oem_umbra_out`, and only ever flushes those.
 
-**`umbra_in` (when inbound_drop=1)** accepts, in order: loopback; replies to
+**`oem_umbra_in` (when inbound_drop=1)** accepts, in order: loopback; replies to
 connections the phone opened; DNS and DHCP (so a hotspot still serves its
 clients); and, on IPv6, neighbour discovery, multicast listener reports and
 DHCPv6. Everything else unsolicited is dropped silently, including ping.
 
-**`umbra_out` (when discovery_drop=1)** drops outbound UDP to ports 5353 (mDNS),
+**`oem_umbra_out` (when discovery_drop=1)** drops outbound UDP to ports 5353 (mDNS),
 5355 (LLMNR), 1900 (SSDP/UPnP), 137-138 (NetBIOS) and 3702 (WS-Discovery).
 
 Consequences worth knowing: wireless ADB and anything else that listens on the
@@ -50,15 +50,35 @@ cannot do is add SELinux policy. Add this directory's policy to the board or
 product configuration:
 
 ```make
-SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += packages/apps/Umbra/android/os-integration/sepolicy/private
+UMBRA_SEPOLICY := packages/apps/Umbra/android/os-integration/sepolicy
+SYSTEM_EXT_PUBLIC_SEPOLICY_DIRS  += $(UMBRA_SEPOLICY)/public
+SYSTEM_EXT_PRIVATE_SEPOLICY_DIRS += $(UMBRA_SEPOLICY)/private
+BOARD_VENDOR_SEPOLICY_DIRS       += $(UMBRA_SEPOLICY)/vendor
 ```
 
 (adjust the path to wherever this repository is checked out).
 
-The policy gives the service its own domain, `umbra_net`, with exactly what the
-script needs: run a shell script, run `iptables`, hold `NET_ADMIN`/`NET_RAW`,
-and read/write its properties. It also lets `platform_app`, the domain a
-platform-signed app runs in, write the two request properties and read the status.
+| Directory | What it adds |
+|---|---|
+| `public/` | The two property types, visible to both system and vendor policy |
+| `private/` | Property labels, and permission for `platform_app` (the domain a platform-signed app runs in) to write the requests and read the status |
+| `vendor/` | The service's own domain, `umbra_net` |
+
+### Why the service is vendor code
+
+On Android, changing any rule rewrites the whole filter table, including
+`netd`'s own rules that reference kernel BPF programs. Stock SELinux policy lets
+exactly two things do that: `netd`, and `netutils-wrapper`, the door Android
+leaves open for OS builders. The wrapper only takes commands from vendor
+domains, and only for chains named `oem_*`.
+
+So `umbra-net` is a vendor service that calls
+`/system/bin/ip[6]tables-wrapper-1.0`. Its domain needs no iptables, capability
+or BPF rules of its own: it may run a vendor shell script and read/write its two
+properties, and nothing else. No stock policy or neverallow rule is changed.
+
+This needs the vendor image to be built from source. A device that ships a
+prebuilt vendor image cannot add the vendor policy this way.
 
 ## Files
 
@@ -66,4 +86,4 @@ platform-signed app runs in, write the two request properties and read the statu
 |---|---|
 | `umbra-net.sh` | The service: reads the requests, writes the rules, reports the result |
 | `umbra-net.rc` | When init starts it: on `netd` start and whenever a request changes |
-| `sepolicy/private/` | The SELinux domain, property types and labels |
+| `sepolicy/` | The SELinux policy, in the three directories described above |

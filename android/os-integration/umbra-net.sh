@@ -1,4 +1,4 @@
-#!/system/bin/sh
+#!/vendor/bin/sh
 #
 # umbra-net: the OS half of Umbra's `firewall` and `discovery` capabilities.
 #
@@ -15,73 +15,84 @@
 # value back from umbra.net.applied. If this service is missing or fails, that
 # never happens, and the app says so instead of pretending.
 #
-# netd (Android's network daemon) owns the filter table but leaves two empty
-# chains for the OS builder, oem_in and oem_out, hooked first into INPUT and
-# OUTPUT. We add ONE jump from each into chains of our own (umbra_in/umbra_out)
-# and only ever flush our own, so anything else using the oem chains is left alone.
+# Why it lives in /vendor and calls a "wrapper": on Android, changing ANY rule
+# rewrites the whole filter table, including netd's own rules that reference
+# kernel BPF programs. SELinux lets only two things do that: netd itself, and
+# netutils-wrapper, the door Android leaves open for OS builders. The wrapper
+# accepts commands from vendor code only, and only for chains named oem_*. So
+# this service is vendor code, and its chains are oem_umbra_in / oem_umbra_out,
+# hooked from netd's empty oem_in / oem_out. Stock SELinux policy is untouched.
 
 INBOUND_PROP=persist.umbra.net.inbound_drop
 DISCOVERY_PROP=persist.umbra.net.discovery_drop
 STATUS_PROP=umbra.net.applied
 
-V4="iptables -w 5"
-V6="ip6tables -w 5"
+V4="/system/bin/iptables-wrapper-1.0 -w 5"
+V6="/system/bin/ip6tables-wrapper-1.0 -w 5"
+IN=oem_umbra_in
+OUT=oem_umbra_out
 failed=0
 
 run() { "$@" || failed=1; }
 
-# netd creates its chains a moment after it starts; wait for them.
+# Make sure our chain exists and that the hook chain jumps to it exactly once.
+# Fails (quietly) until netd has created the hook chain.
+hook() {   # $1 = wrapper command, $2 = netd's hook chain, $3 = our chain
+    $1 -N "$3" 2>/dev/null
+    $1 -C "$2" -j "$3" 2>/dev/null || $1 -A "$2" -j "$3" 2>/dev/null
+}
+
+hook_all() {
+    hook "$V4" oem_in $IN && hook "$V4" oem_out $OUT &&
+        hook "$V6" oem_in $IN && hook "$V6" oem_out $OUT
+}
+
+# netd creates its chains a moment after it starts; keep trying for a minute.
 wait_for_netd() {
     tries=0
-    until $V4 -S oem_in >/dev/null 2>&1 && $V6 -S oem_in >/dev/null 2>&1; do
+    until hook_all; do
         tries=$((tries + 1))
         [ "$tries" -gt 120 ] && return 1
         sleep 0.5
     done
 }
 
-# Make sure <chain> exists and is empty, and that <hook> jumps to it exactly once.
-prepare() {   # $1 = "iptables ..." command, $2 = hook chain, $3 = our chain
-    $1 -N "$3" 2>/dev/null
-    run $1 -F "$3"
-    $1 -C "$2" -j "$3" 2>/dev/null || run $1 -A "$2" -j "$3"
-}
-
 apply() {
     inbound=$1
     discovery=$2
+    hook_all || failed=1
     for cmd in "$V4" "$V6"; do
-        prepare "$cmd" oem_in umbra_in
-        prepare "$cmd" oem_out umbra_out
+        run $cmd -F $IN
+        run $cmd -F $OUT
     done
 
     if [ "$inbound" = "1" ]; then
         for cmd in "$V4" "$V6"; do
-            run $cmd -A umbra_in -i lo -j RETURN
+            run $cmd -A $IN -i lo -j RETURN
             # Replies to connections the phone itself opened.
-            run $cmd -A umbra_in -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
+            run $cmd -A $IN -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
             # DNS for hotspot clients. Nothing listens here unless tethering is on.
-            run $cmd -A umbra_in -p udp --dport 53 -j RETURN
-            run $cmd -A umbra_in -p tcp --dport 53 -j RETURN
+            run $cmd -A $IN -p udp --dport 53 -j RETURN
+            run $cmd -A $IN -p tcp --dport 53 -j RETURN
         done
         # DHCP: replies to the phone's client, and requests to its hotspot server.
-        run $V4 -A umbra_in -p udp --dport 67:68 -j RETURN
+        run $V4 -A $IN -p udp --dport 67:68 -j RETURN
         # IPv6 cannot work without neighbour discovery (133-137) and multicast
         # listener reports (130-132, 143). Echo requests (128) are NOT allowed.
         for type in 130 131 132 133 134 135 136 137 143; do
-            run $V6 -A umbra_in -p ipv6-icmp --icmpv6-type "$type" -j RETURN
+            run $V6 -A $IN -p ipv6-icmp --icmpv6-type "$type" -j RETURN
         done
-        run $V6 -A umbra_in -p udp --dport 546 -j RETURN      # DHCPv6 client
+        run $V6 -A $IN -p udp --dport 546 -j RETURN      # DHCPv6 client
         # Everything else unsolicited is dropped silently (no reject, no reply).
-        run $V4 -A umbra_in -j DROP
-        run $V6 -A umbra_in -j DROP
+        run $V4 -A $IN -j DROP
+        run $V6 -A $IN -j DROP
     fi
 
     if [ "$discovery" = "1" ]; then
         # mDNS, LLMNR, SSDP/UPnP, NetBIOS name + datagram, WS-Discovery.
         for port in 5353 5355 1900 137 138 3702; do
-            run $V4 -A umbra_out -p udp --dport "$port" -j DROP
-            run $V6 -A umbra_out -p udp --dport "$port" -j DROP
+            run $V4 -A $OUT -p udp --dport "$port" -j DROP
+            run $V6 -A $OUT -p udp --dport "$port" -j DROP
         done
     fi
 }
