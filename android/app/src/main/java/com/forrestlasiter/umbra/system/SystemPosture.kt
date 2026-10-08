@@ -19,6 +19,7 @@ object SystemPosture {
      * matching the Linux engine's APPLY_ORDER (raise walls first, radios last).
      */
     private fun controls(context: Context): List<SystemControl> = listOf(
+        TelemetryControl(canary = canaryDomain(context)),
         FirewallControl(),
         DiscoveryControl(),
         MacControl(context),
@@ -35,6 +36,17 @@ object SystemPosture {
         val app = context.applicationContext
         if (!SystemMode.isSystemBuild(app)) return emptySet()
         return controls(app).filterNot { it.available() }.mapTo(mutableSetOf()) { it.capability }
+    }
+
+    /**
+     * A blocklisted domain the telemetry control resolves to prove the sinkhole
+     * works. Taken from the bundled spec so it is always a name the OS's hosts
+     * file (generated from the same lists) contains. Null if the spec has none.
+     */
+    private fun canaryDomain(context: Context): String? = try {
+        SpecRepository(context).load().telemetryBlocklists.values.flatten().minOrNull()
+    } catch (e: Exception) {
+        null
     }
 
     private fun applier(context: Context) =

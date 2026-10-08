@@ -233,8 +233,8 @@
           "reason": "forces a fresh random Wi-Fi MAC per connection on every network that randomizes (Android's default)"
         },
         "telemetry": {
-          "level": "requires_vpn_profile",
-          "reason": "sinkhole telemetry domains via a local VPNService DNS filter"
+          "level": "enforced",
+          "reason": "the OS resolver answers blocklisted domains from a built-in hosts sinkhole, on any DNS transport and without the VPN slot"
         },
         "tor": {
           "level": "requires_vpn_profile",

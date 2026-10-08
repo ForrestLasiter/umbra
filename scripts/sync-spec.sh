@@ -19,5 +19,7 @@ fi
 cp spec/umbra-core.json android/app/src/main/assets/umbra-core.json
 mkdir -p ios/Umbra/Resources
 cp spec/umbra-core.json ios/Umbra/Resources/umbra-core.json
+# The hosts file an Android OS build ships for the telemetry sinkhole.
+cp spec/umbra-telemetry.hosts android/os-integration/telemetry.hosts
 
 echo "synced spec/umbra-core.json -> android assets + ios resources"

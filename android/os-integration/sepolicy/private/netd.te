@@ -1,0 +1,3 @@
+# The DNS resolver runs inside netd. With the resolver patch applied it checks
+# persist.umbra.net.telemetry_sinkhole to decide which hosts file to read.
+get_prop(netd, umbra_net_prop)

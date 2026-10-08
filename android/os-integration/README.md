@@ -1,9 +1,12 @@
-# OS integration: the packet-filter service
+# OS integration
 
-Two of Umbra's capabilities, `firewall` and `discovery`, are packet-filter rules.
-On Android only root can write those, so an OS build that wants them ships the
-small service in this directory. Everything else in the `android_system`
-platform works without it.
+Three of Umbra's capabilities need something from the OS that no app can do for
+itself. `firewall` and `discovery` are packet-filter rules, which only root can
+write, so the OS ships the small service in this directory. `telemetry` needs
+the resolver to read a blocklist; see "The telemetry sinkhole" below. Everything
+else in the `android_system` platform works without any of this.
+
+## The packet-filter service
 
 ## The contract
 
@@ -79,6 +82,36 @@ properties, and nothing else. No stock policy or neverallow rule is changed.
 
 This needs the vendor image to be built from source. A device that ships a
 prebuilt vendor image cannot add the vendor policy this way.
+
+## The telemetry sinkhole
+
+The `telemetry` capability on an OS build does not use the VPN slot. Android's
+resolver looks a name up in the hosts file before it sends any DNS query, so a
+hosts file that maps telemetry domains to the unspecified address stops them
+resolving, whichever DNS transport is in use.
+
+| Piece | What it is |
+|---|---|
+| `telemetry.hosts` | Generated from `umbra/blocklists.py` by `scripts/sync-spec.sh`; installed as `/system_ext/etc/umbra/hosts`. Includes the stock localhost lines, because it replaces the stock hosts file while active. |
+| `patches/packages/modules/DnsResolver/` | A patch to the resolver: while `persist.umbra.net.telemetry_sinkhole` is `1`, read that file instead of `/system/etc/hosts`. |
+| `ro.umbra.dns_sinkhole=1` | A build property by which the OS states that it carries the patch. |
+
+The hosts file is installed with the app automatically. An OS build must do the
+other two itself: apply the patch to `packages/modules/DnsResolver` (the
+resolver must be built from source), and set the property, for example:
+
+```make
+PRODUCT_SYSTEM_EXT_PROPERTIES += ro.umbra.dns_sinkhole=1
+```
+
+The property is a claim, not proof. When the app turns the sinkhole on it
+resolves a blocklisted domain and reports the capability as enforced only if the
+answer is the unspecified address, so an OS that sets the property without the
+patch is caught.
+
+The limit is the same as a hosts file on Linux: an app with its own
+DNS-over-HTTPS client, or with hardcoded addresses, does not ask the system
+resolver and is not affected. Subdomains are not matched unless listed.
 
 ## Files
 

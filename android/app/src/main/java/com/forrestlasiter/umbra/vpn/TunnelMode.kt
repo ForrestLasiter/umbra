@@ -13,8 +13,12 @@ enum class TunnelMode {
     TOR, WIREGUARD, DNS_SINKHOLE, NONE;
 
     companion object {
+        // ENFORCE is deliberately absent: it means the capability is already
+        // enforced WITHOUT a tunnel. On an OS build `telemetry` is ENFORCE (the
+        // resolver's hosts sinkhole does it), so it must not also grab the VPN
+        // slot for a DNS filter -- freeing that slot is the point.
         private val ENFORCED_BY_TUNNEL = setOf(
-            PlannedAction.ENFORCE, PlannedAction.REQUEST_CONSENT, PlannedAction.NEEDS_TUNNEL,
+            PlannedAction.REQUEST_CONSENT, PlannedAction.NEEDS_TUNNEL,
         )
 
         private fun PosturePlan.tunnels(capability: String): Boolean =

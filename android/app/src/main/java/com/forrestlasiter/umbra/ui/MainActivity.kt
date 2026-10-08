@@ -27,6 +27,7 @@ import com.forrestlasiter.umbra.system.SystemPosture
 import com.forrestlasiter.umbra.tor.OrbotHelper
 import com.forrestlasiter.umbra.vpn.SinkholeStats
 import com.forrestlasiter.umbra.vpn.TunnelController
+import com.forrestlasiter.umbra.vpn.TunnelMode
 
 class MainActivity : ComponentActivity() {
 
@@ -159,6 +160,13 @@ class MainActivity : ComponentActivity() {
         // tunnel runs, exactly as before.
         val system = SystemPosture.apply(this, state.selected)
         val systemNote = system?.let { SystemPosture.summarize(state.selected, it) }
+        // On an OS build a posture may need no tunnel at all (every capability is
+        // a system control). That is success, not "nothing to enforce".
+        if (system != null && tunnels.modeFor(plan) == TunnelMode.NONE) {
+            vm.setActive(true)
+            vm.setMessage(systemNote)
+            return
+        }
         val error = tunnels.activate(state.selected, plan)
         when {
             error == null -> { vm.setActive(true); vm.setMessage(systemNote ?: "Enforcing ${state.selected}.") }

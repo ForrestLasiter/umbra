@@ -1,7 +1,11 @@
 package com.forrestlasiter.umbra.vpn
 
 import com.forrestlasiter.umbra.core.CoreSpec
+import com.forrestlasiter.umbra.core.Enforcement
+import com.forrestlasiter.umbra.core.PlannedAction
 import com.forrestlasiter.umbra.core.PostureEngine
+import com.forrestlasiter.umbra.core.PostureItem
+import com.forrestlasiter.umbra.core.PosturePlan
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -9,6 +13,16 @@ class TunnelModeTest {
 
     private fun mode(profile: String) =
         TunnelMode.forPlan(PostureEngine.plan(CoreSpec.parse(SPEC), profile))
+
+    @Test fun telemetry_enforced_by_the_os_leaves_the_vpn_slot_free() {
+        // On an OS build the resolver's hosts sinkhole enforces telemetry, so the
+        // plan marks it ENFORCE. That must not start the DNS-filter tunnel.
+        val enforcedByOs = PostureItem(
+            capability = "telemetry", summary = "", enforcement = Enforcement.ENFORCED,
+            reason = "", action = PlannedAction.ENFORCE,
+        )
+        assertEquals(TunnelMode.NONE, TunnelMode.forPlan(PosturePlan("home", listOf(enforcedByOs))))
+    }
 
     @Test fun paranoid_routes_through_tor_even_though_it_also_needs_wireguard() {
         assertEquals(TunnelMode.TOR, mode("paranoid"))

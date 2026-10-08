@@ -129,6 +129,7 @@ CAPABILITY_SUPPORT: dict[Platform, dict[str, tuple[Enforcement, str]]] = {
 _ANDROID_SYSTEM_OVERRIDES: dict[str, tuple[Enforcement, str]] = {
     "firewall":     (_E.ENFORCED, "default-deny inbound packet filter, applied by the OS's umbra-net service and read back before it is reported"),
     "discovery":    (_E.ENFORCED, "drops outbound mDNS/LLMNR/SSDP/NetBIOS/WS-Discovery packets in the OS packet filter"),
+    "telemetry":    (_E.ENFORCED, "the OS resolver answers blocklisted domains from a built-in hosts sinkhole, on any DNS transport and without the VPN slot"),
     "hostname":     (_E.ENFORCED, "sets the Wi-Fi restriction that stops the device name being sent over DHCP, on open and secured networks"),
     "mac":          (_E.ENFORCED, "forces a fresh random Wi-Fi MAC per connection on every network that randomizes (Android's default)"),
     "bluetooth_off":(_E.ENFORCED, "turns the Bluetooth radio off with the privileged adapter API"),

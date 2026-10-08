@@ -88,3 +88,29 @@ def test_checked_in_spec_is_structurally_up_to_date():
     on_disk = json.loads(committed.read_text(encoding="utf-8"))
     assert _structural(on_disk) == _structural(spec.build_spec()), \
         "spec/umbra-core.json is structurally stale; run: umbra export-spec"
+
+
+def test_sinkhole_hosts_file_blocks_every_listed_domain_on_both_families():
+    from umbra.blocklists import TELEMETRY_BLOCKLISTS
+    text = spec.build_sinkhole_hosts()
+    lines = [ln for ln in text.splitlines() if ln and not ln.startswith("#")]
+    # It REPLACES the stock hosts file, so localhost must still resolve.
+    assert "127.0.0.1 localhost" in lines and "::1 ip6-localhost" in lines
+    for domains in TELEMETRY_BLOCKLISTS.values():
+        for d in domains:
+            assert f"0.0.0.0 {d}" in lines and f":: {d}" in lines
+    # Nothing else sneaks in: two localhost lines + two per unique domain.
+    unique = {d for ds in TELEMETRY_BLOCKLISTS.values() for d in ds}
+    assert len(lines) == 2 + 2 * len(unique)
+
+
+def test_checked_in_sinkhole_hosts_file_is_up_to_date():
+    # The copy an OS build installs must match the blocklists, or the phone and
+    # the laptop would silently block different things.
+    from umbra import paths
+    shipped = paths._PKG_DIR.parent / "android" / "os-integration" / "telemetry.hosts"
+    if not shipped.exists():
+        return  # not in a source checkout
+    # splitlines() so a Windows checkout's line endings do not matter.
+    assert shipped.read_text(encoding="ascii").splitlines() == spec.build_sinkhole_hosts().splitlines(), \
+        "android/os-integration/telemetry.hosts is stale; run: scripts/sync-spec.sh"

@@ -65,6 +65,7 @@ ordinary app can never get, and plans against a second row of the core matrix,
 | webcam_off | advisory | **enforced** - sets the OS "no camera" restriction for every app |
 | firewall | needs root | **enforced** - default-deny inbound, via the OS's `umbra-net` service |
 | discovery | advisory | **enforced** - drops outbound mDNS/LLMNR/SSDP/NetBIOS/WSD packets |
+| telemetry | via the VPN slot | **enforced** - the OS resolver's hosts sinkhole; the VPN slot stays free |
 | everything else | as above | unchanged until its system control is written |
 
 The matrix only lists a capability as enforced once its control exists, so this
@@ -85,7 +86,8 @@ How it fits together:
 - `system/PostureCommandReceiver` applies a profile from `adb shell`, for testing:
 
   ```bash
-  adb shell am broadcast -n com.forrestlasiter.umbra/.system.PostureCommandReceiver       -a com.forrestlasiter.umbra.action.APPLY_POSTURE --es profile travel
+  adb shell am broadcast -n com.forrestlasiter.umbra/.system.PostureCommandReceiver \
+      -a com.forrestlasiter.umbra.action.APPLY_POSTURE --es profile travel
   ```
 
 `firewall` and `discovery` live in the kernel's packet filter, which no app can

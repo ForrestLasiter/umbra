@@ -1,0 +1,107 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Forrest Lasiter <40743508+ForrestLasiter@users.noreply.github.com>
+Date: Thu, 8 Oct 2026 10:00:00 -0500
+Subject: [PATCH] Read an alternate hosts file while Umbra's telemetry sinkhole
+ is on
+
+When persist.umbra.net.telemetry_sinkhole is set, read the hosts file
+from /system_ext/etc/umbra/hosts instead of /system/etc/hosts. That file
+maps telemetry domains to the unspecified address, so they stop
+resolving regardless of DNS transport and without using the VPN slot.
+If the file is missing the stock hosts file is used as before.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Change-Id: I22784f58b67f96f3e55cf6def7c8fac5334299c4
+---
+ getaddrinfo.cpp |  5 +++--
+ hosts_path.h    | 29 +++++++++++++++++++++++++++++
+ sethostent.cpp  |  3 ++-
+ 3 files changed, 34 insertions(+), 3 deletions(-)
+ create mode 100644 hosts_path.h
+
+diff --git a/getaddrinfo.cpp b/getaddrinfo.cpp
+index ce97c85..5c1e263 100644
+--- a/getaddrinfo.cpp
++++ b/getaddrinfo.cpp
+@@ -33,6 +33,7 @@
+ #define LOG_TAG "resolv"
+ 
+ #include "getaddrinfo.h"
++#include "hosts_path.h"
+ 
+ #include <arpa/inet.h>
+ #include <arpa/nameser.h>
+@@ -1530,7 +1531,7 @@ static int dns_getaddrinfo(const char* name, const addrinfo* pai,
+ 
+ static void _sethtent(FILE** hostf) {
+     if (!*hostf)
+-        *hostf = fopen(_PATH_HOSTS, "re");
++        *hostf = fopen(resolv_hosts_path(), "re");
+     else
+         rewind(*hostf);
+ }
+@@ -1553,7 +1554,7 @@ static struct addrinfo* _gethtent(FILE** hostf, const char* name, const struct a
+     assert(name != NULL);
+     assert(pai != NULL);
+ 
+-    if (!*hostf && !(*hostf = fopen(_PATH_HOSTS, "re"))) return (NULL);
++    if (!*hostf && !(*hostf = fopen(resolv_hosts_path(), "re"))) return (NULL);
+ again:
+     if (!(p = fgets(hostbuf, sizeof hostbuf, *hostf))) return (NULL);
+     if (*p == '#') goto again;
+diff --git a/hosts_path.h b/hosts_path.h
+new file mode 100644
+index 0000000..f3f7206
+--- /dev/null
++++ b/hosts_path.h
+@@ -0,0 +1,29 @@
++/*
++ * Umbra telemetry sinkhole.
++ *
++ * The resolver answers a name from the hosts file before it ever sends a DNS
++ * query, whichever transport (plain DNS, DoT, DoH) would have carried it. Umbra
++ * uses that for its `telemetry` capability: when the property below is set, the
++ * resolver reads an alternate hosts file that maps telemetry domains to the
++ * unspecified address, so they resolve to nowhere without occupying the VPN slot.
++ *
++ * The alternate file is part of the OS image and includes the usual localhost
++ * entries, so it fully replaces the stock file while the property is set. If it
++ * is missing or unreadable the stock file is used, exactly as before.
++ */
++
++#pragma once
++
++#include <netdb.h>
++#include <unistd.h>
++
++#include <android-base/properties.h>
++
++inline const char* resolv_hosts_path() {
++    static constexpr char kSinkholeHosts[] = "/system_ext/etc/umbra/hosts";
++    if (android::base::GetBoolProperty("persist.umbra.net.telemetry_sinkhole", false) &&
++        access(kSinkholeHosts, R_OK) == 0) {
++        return kSinkholeHosts;
++    }
++    return _PATH_HOSTS;
++}
+diff --git a/sethostent.cpp b/sethostent.cpp
+index 1bd8ab4..5bea1e5 100644
+--- a/sethostent.cpp
++++ b/sethostent.cpp
+@@ -40,6 +40,7 @@
+ #include <string.h>
+ #include <sys/param.h>
+ 
++#include "hosts_path.h"
+ #include "hostent.h"
+ #include "resolv_private.h"
+ 
+@@ -48,7 +49,7 @@ constexpr int MAXADDRS = 35;
+ 
+ static void sethostent_r(FILE** hf) {
+     if (!*hf)
+-        *hf = fopen(_PATH_HOSTS, "re");
++        *hf = fopen(resolv_hosts_path(), "re");
+     else
+         rewind(*hf);
+ }
