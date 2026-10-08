@@ -40,7 +40,8 @@ on property:persist.umbra.kernel.harden=1
 on load-bpf-programs && property:persist.umbra.kernel.harden=1
     write /proc/sys/kernel/perf_event_paranoid 3
 
-# Put perf_event_paranoid back to what the app recorded before it hardened. If
-# it recorded nothing, stay hardened.
-on property:persist.umbra.kernel.harden=0
-    write /proc/sys/kernel/perf_event_paranoid ${persist.umbra.kernel.prior_perf_paranoid:-3}
+# Put perf_event_paranoid back to what the app recorded before it hardened. The
+# second condition means this does nothing at all unless a value was recorded,
+# so it can never invent one.
+on property:persist.umbra.kernel.harden=0 && property:persist.umbra.kernel.prior_perf_paranoid=*
+    write /proc/sys/kernel/perf_event_paranoid ${persist.umbra.kernel.prior_perf_paranoid}
