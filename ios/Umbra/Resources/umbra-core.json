@@ -209,12 +209,12 @@
           "reason": "turns the Bluetooth radio off with the privileged adapter API"
         },
         "discovery": {
-          "level": "advisory",
-          "reason": "system owns mDNS/NSD; an app cannot silence it without root"
+          "level": "enforced",
+          "reason": "drops outbound mDNS/LLMNR/SSDP/NetBIOS/WS-Discovery packets in the OS packet filter"
         },
         "firewall": {
-          "level": "requires_rooted_os",
-          "reason": "a system inbound firewall needs root; unrooted Android already sandboxes inbound per-app"
+          "level": "enforced",
+          "reason": "default-deny inbound packet filter, applied by the OS's umbra-net service and read back before it is reported"
         },
         "hostname": {
           "level": "enforced",

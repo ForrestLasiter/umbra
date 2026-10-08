@@ -9,6 +9,7 @@ enum class Change {
     KEPT,        // already part of the posture; re-asserted in case it drifted
     RESTORED,    // no longer wanted; prior state replayed
     UNTOUCHED,   // not wanted and never changed by us
+    UNAVAILABLE, // wanted, but this OS build lacks what the control needs
 }
 
 data class Outcome(val capability: String, val change: Change, val ok: Boolean)
@@ -35,6 +36,11 @@ class PostureApplier(
         val cap = control.capability
         val prior = store.get(cap)
         when {
+            // Wanted but impossible here: change nothing and say so. (If we hold
+            // a snapshot from before, fall through and keep/restore as usual --
+            // an unavailable control must never strand a setting we changed.)
+            cap in wanted && prior == null && !control.available() ->
+                Outcome(cap, Change.UNAVAILABLE, ok = true)
             cap in wanted && prior == null -> {
                 val now = control.snapshot()
                 if (now == null) {

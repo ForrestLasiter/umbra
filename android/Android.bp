@@ -21,8 +21,20 @@ genrule {
     cmd: "sed 's/<manifest /<manifest package=\"com.forrestlasiter.umbra\" /' $(in) > $(out)",
 }
 
+// The OS half of the `firewall` and `discovery` capabilities: a small root
+// service that applies packet-filter rules on the app's behalf. See
+// os-integration/README.md for what an OS build must also add (SELinux policy).
+sh_binary {
+    name: "umbra-net",
+    src: "os-integration/umbra-net.sh",
+    filename: "umbra-net",
+    init_rc: ["os-integration/umbra-net.rc"],
+    system_ext_specific: true,
+}
+
 android_app {
     name: "Umbra",
+    required: ["umbra-net"],
     manifest: ":UmbraPlatformManifest",
 
     srcs: [

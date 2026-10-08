@@ -21,7 +21,9 @@ class PostureApplierTest {
         var state: String? = "original",
         var refuseRestore: Boolean = false,
         private val events: MutableList<String> = mutableListOf(),
+        var present: Boolean = true,
     ) : SystemControl {
+        override fun available(): Boolean = present
         override fun snapshot(): String? = state
         override fun enforce(): Boolean { events += "enforce:$capability"; state = "dark"; return true }
         override fun restore(prior: String): Boolean {
@@ -139,6 +141,24 @@ class PostureApplierTest {
         applier.apply(spec, "normal", system)
         assertEquals("a", mac.state)
         assertNull(store.activeProfile)
+    }
+
+    @Test fun a_control_the_os_cannot_support_is_reported_not_enforced() {
+        val mac = FakeControl("mac", present = false)
+        val store = MapStore()
+        val outcome = PostureApplier(listOf(mac), store).apply(spec, "home", system).single()
+        assertEquals(Change.UNAVAILABLE, outcome.change)
+        assertFalse(mac.isEnforced())
+        assertTrue(store.map.isEmpty())                    // nothing to restore later
+    }
+
+    @Test fun a_control_that_becomes_unavailable_is_still_restored() {
+        val mac = FakeControl("mac", state = "a")
+        val applier = PostureApplier(listOf(mac), MapStore())
+        applier.apply(spec, "home", system)
+        mac.present = false                                // e.g. the OS helper stopped
+        applier.apply(spec, "normal", system)
+        assertEquals("a", mac.state)                       // we changed it; we put it back
     }
 
     @Test fun a_control_that_cannot_be_read_is_not_changed() {

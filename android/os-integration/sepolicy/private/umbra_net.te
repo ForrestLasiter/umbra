@@ -1,0 +1,25 @@
+# SELinux policy for umbra-net, the root service that applies Umbra's packet
+# filter rules (see ../../umbra-net.sh). It may do exactly what that script
+# needs: run a shell script, run iptables, and read/write its own properties.
+
+type umbra_net, domain, coredomain;
+type umbra_net_exec, exec_type, file_type, system_file_type;
+
+init_daemon_domain(umbra_net)
+
+# It is a shell script that calls getprop/setprop/sleep.
+allow umbra_net shell_exec:file rx_file_perms;
+allow umbra_net toolbox_exec:file rx_file_perms;
+
+# iptables and ip6tables are ordinary system files; they also take an advisory
+# lock on /system/etc/xtables.lock.
+allow umbra_net system_file:file { rx_file_perms lock };
+
+# What iptables itself needs: the two capabilities and a raw socket to talk to
+# the kernel's packet filter.
+allow umbra_net self:global_capability_class_set { net_admin net_raw };
+allow umbra_net self:rawip_socket create_socket_perms_no_ioctl;
+
+# Read what is wanted; report what was applied.
+get_prop(umbra_net, umbra_net_prop)
+set_prop(umbra_net, umbra_net_status_prop)

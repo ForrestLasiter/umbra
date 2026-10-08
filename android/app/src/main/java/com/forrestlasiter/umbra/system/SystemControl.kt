@@ -23,6 +23,14 @@ interface SystemControl {
     /** The capability token this control satisfies. */
     val capability: String
 
+    /**
+     * Can this control work on THIS OS build at all? Most controls only need a
+     * permission, which SystemMode has already checked. A few need the OS to ship
+     * a helper (the packet-filter service, for example); an OS that integrated
+     * Umbra without it must show the capability as unavailable, not as enforced.
+     */
+    fun available(): Boolean = true
+
     /** The current state, or null if it cannot be read (then nothing is changed). */
     fun snapshot(): String?
 

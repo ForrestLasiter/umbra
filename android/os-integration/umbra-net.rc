@@ -1,0 +1,24 @@
+# Starts umbra-net (see umbra-net.sh) whenever the wanted state changes, and
+# again whenever netd (re)starts, because netd rebuilds its chains from scratch.
+#
+# NET_ADMIN and NET_RAW are the two capabilities iptables needs; the service has
+# no others even though it runs as root.
+
+service umbra-net /system_ext/bin/umbra-net
+    class main
+    user root
+    group root
+    capabilities NET_ADMIN NET_RAW
+    oneshot
+    disabled
+
+# persist.* properties are loaded before netd starts, so a posture that was
+# active before a reboot is back in force as soon as netd's chains exist.
+on property:init.svc.netd=running
+    start umbra-net
+
+on property:persist.umbra.net.inbound_drop=*
+    start umbra-net
+
+on property:persist.umbra.net.discovery_drop=*
+    start umbra-net

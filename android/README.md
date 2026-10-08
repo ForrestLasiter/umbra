@@ -63,6 +63,8 @@ ordinary app can never get, and plans against a second row of the core matrix,
 | hostname | advisory | **enforced** - stops the device name being sent over DHCP |
 | bluetooth_off | advisory | **enforced** - turns the radio off, restores it afterwards |
 | webcam_off | advisory | **enforced** - sets the OS "no camera" restriction for every app |
+| firewall | needs root | **enforced** - default-deny inbound, via the OS's `umbra-net` service |
+| discovery | advisory | **enforced** - drops outbound mDNS/LLMNR/SSDP/NetBIOS/WSD packets |
 | everything else | as above | unchanged until its system control is written |
 
 The matrix only lists a capability as enforced once its control exists, so this
@@ -85,6 +87,12 @@ How it fits together:
   ```bash
   adb shell am broadcast -n com.forrestlasiter.umbra/.system.PostureCommandReceiver       -a com.forrestlasiter.umbra.action.APPLY_POSTURE --es profile travel
   ```
+
+`firewall` and `discovery` live in the kernel's packet filter, which no app can
+write to. The OS ships a small root service for that; see
+[`os-integration/README.md`](os-integration/README.md). An OS that leaves it out
+still gets every other control: `SystemControl.available()` is false for those
+two, the plan shows them as unavailable, and nothing claims they are on.
 
 To build it into an OS, check this repository out inside the source tree (for
 example at `packages/apps/Umbra`) and add `Umbra` to `PRODUCT_PACKAGES`;

@@ -1,0 +1,2 @@
+persist.umbra.net.      u:object_r:umbra_net_prop:s0
+umbra.net.applied       u:object_r:umbra_net_status_prop:s0 exact string

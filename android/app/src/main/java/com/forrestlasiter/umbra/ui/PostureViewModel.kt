@@ -41,6 +41,9 @@ class PostureViewModel(app: Application) : AndroidViewModel(app) {
     // Decided once: which row of the spec's platform matrix this install plans
     // against ("android", or "android_system" when built into the OS).
     private val platform = SystemMode.platform(app)
+
+    // Capabilities this particular OS build cannot deliver (see SystemControl.available).
+    private val unavailable = SystemPosture.unavailable(app)
     private val _state = MutableStateFlow(PostureUiState())
     val state: StateFlow<PostureUiState> = _state.asStateFlow()
 
@@ -59,7 +62,7 @@ class PostureViewModel(app: Application) : AndroidViewModel(app) {
                 spec = spec,
                 profileNames = names,
                 selected = selected,
-                plan = PostureEngine.plan(spec, selected, platform),
+                plan = PostureEngine.plan(spec, selected, platform, unavailable),
                 active = held != PostureApplier.NORMAL,
                 systemBuild = SystemMode.isSystemBuild(getApplication()),
                 wgConfigured = store.exists(),
@@ -74,7 +77,7 @@ class PostureViewModel(app: Application) : AndroidViewModel(app) {
         val spec = _state.value.spec ?: return
         _state.value = _state.value.copy(
             selected = profile,
-            plan = PostureEngine.plan(spec, profile, platform),
+            plan = PostureEngine.plan(spec, profile, platform, unavailable),
             message = null,
         )
     }

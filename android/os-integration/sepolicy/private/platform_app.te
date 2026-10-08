@@ -1,0 +1,4 @@
+# Umbra is a platform-signed app, so it runs in the platform_app domain. Let that
+# domain state what it wants from the packet filter and read back the result.
+set_prop(platform_app, umbra_net_prop)
+get_prop(platform_app, umbra_net_status_prop)

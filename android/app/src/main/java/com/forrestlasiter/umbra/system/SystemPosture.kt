@@ -19,11 +19,23 @@ object SystemPosture {
      * matching the Linux engine's APPLY_ORDER (raise walls first, radios last).
      */
     private fun controls(context: Context): List<SystemControl> = listOf(
+        FirewallControl(),
+        DiscoveryControl(),
         MacControl(context),
         BluetoothControl(context),
         CameraControl(context),
         HostnameControl(context),
     )
+
+    /**
+     * Capabilities the matrix promises on a system build but that this particular
+     * OS cannot deliver. Empty on a normal install (nothing is promised there).
+     */
+    fun unavailable(context: Context): Set<String> {
+        val app = context.applicationContext
+        if (!SystemMode.isSystemBuild(app)) return emptySet()
+        return controls(app).filterNot { it.available() }.mapTo(mutableSetOf()) { it.capability }
+    }
 
     private fun applier(context: Context) =
         PostureApplier(controls(context), PrefsSnapshotStore(context))
@@ -56,10 +68,12 @@ object SystemPosture {
     fun summarize(profile: String, outcomes: List<Outcome>): String {
         val failed = outcomes.filter { !it.ok }.map { it.capability }
         val enforced = outcomes.count { it.ok && (it.change == Change.ENFORCED || it.change == Change.KEPT) }
+        val missing = outcomes.filter { it.change == Change.UNAVAILABLE }.map { it.capability }
+        val note = if (missing.isEmpty()) "" else " Not available on this OS: ${missing.joinToString()}."
         return when {
-            failed.isNotEmpty() -> "$profile: could not change ${failed.joinToString()}"
+            failed.isNotEmpty() -> "$profile: could not change ${failed.joinToString()}.$note"
             profile == PostureApplier.NORMAL -> "Back to normal: system settings restored."
-            else -> "$profile: $enforced system control(s) enforced."
+            else -> "$profile: $enforced system control(s) enforced.$note"
         }
     }
 }
