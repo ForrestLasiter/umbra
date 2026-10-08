@@ -7,6 +7,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Sockets and name lookups. The DNS filter forwards allowed queries to a
+         real resolver, WireGuard talks to its endpoint, and an OS build resolves
+         a blocklisted domain to prove the telemetry sinkhole is working. Without
+         this, every one of those fails with a permission error. -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- Read-only posture checks (advisory capabilities) -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
