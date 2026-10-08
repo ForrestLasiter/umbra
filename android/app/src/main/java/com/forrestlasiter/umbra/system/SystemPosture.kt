@@ -19,6 +19,7 @@ object SystemPosture {
      * matching the Linux engine's APPLY_ORDER (raise walls first, radios last).
      */
     private fun controls(context: Context): List<SystemControl> = listOf(
+        KernelControl(),
         TelemetryControl(canary = canaryDomain(context)),
         FirewallControl(),
         DiscoveryControl(),

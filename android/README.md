@@ -66,6 +66,7 @@ ordinary app can never get, and plans against a second row of the core matrix,
 | firewall | needs root | **enforced** - default-deny inbound, via the OS's `umbra-net` service |
 | discovery | advisory | **enforced** - drops outbound mDNS/LLMNR/SSDP/NetBIOS/WSD packets |
 | telemetry | via the VPN slot | **enforced** - the OS resolver's hosts sinkhole; the VPN slot stays free |
+| kernel | needs root | **enforced** - init asserts the hardening sysctls; perf lockdown is read back as proof |
 | everything else | as above | unchanged until its system control is written |
 
 The matrix only lists a capability as enforced once its control exists, so this

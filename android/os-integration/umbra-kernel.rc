@@ -1,0 +1,38 @@
+# The OS half of Umbra's `kernel` capability.
+#
+# On Android only init may read or write the security-sensitive sysctls; no app
+# and no other service can, whatever it is signed with. So the app asks through a
+# property and init does the work here.
+#
+#   persist.umbra.kernel.harden=1             harden now
+#   persist.umbra.kernel.harden=0             stop holding it
+#   persist.umbra.kernel.prior_perf_harden    what perf hardening was before
+#
+# What "harden" does:
+#   - re-asserts the three values Android's own init.rc sets at every boot
+#     (hidden kernel pointers, full ASLR, no setuid core dumps), in case a
+#     profiling tool lowered one since. They are the OS's normal values, so
+#     there is nothing to put back afterwards.
+#   - turns on Android's perf-event lockdown. security.perf_harden is the OS's
+#     own switch for this; init-perfetto.rc reacts by writing
+#     kernel.perf_event_paranoid=3. That sysctl is the one of the set an app CAN
+#     read, so the app reads it back as proof that this action ran.
+#
+# Deliberately not here: dmesg and ptrace are already denied to every app by
+# SELinux on Android, and reverse-path filtering must stay off because Android's
+# multi-network routing depends on it.
+
+# Lets the app tell an OS that ships this file from one that does not.
+on init
+    setprop umbra.kernel.hook 1
+
+on property:persist.umbra.kernel.harden=1
+    write /proc/sys/kernel/kptr_restrict 2
+    write /proc/sys/kernel/randomize_va_space 2
+    write /proc/sys/fs/suid_dumpable 0
+    setprop security.perf_harden 1
+
+# Put perf hardening back to what the app recorded before it hardened. If it
+# recorded nothing, stay hardened, which is also Android's default.
+on property:persist.umbra.kernel.harden=0
+    setprop security.perf_harden ${persist.umbra.kernel.prior_perf_harden:-1}
