@@ -1,0 +1,19 @@
+# When to run umbra-net (defined in umbra-net.rc, on the vendor side).
+#
+# These triggers are in a system-side file on purpose: init refuses property
+# triggers in vendor .rc files unless the vendor side is allowed to read the
+# property, and netd's service state is not readable from there.
+#
+# Run it whenever netd (re)starts, because netd rebuilds its chains from scratch,
+# and whenever the app changes what it wants. persist.* properties are loaded
+# before netd starts, so a posture that was active before a reboot is back in
+# force as soon as netd's chains exist.
+
+on property:init.svc.netd=running
+    start umbra-net
+
+on property:persist.umbra.net.inbound_drop=*
+    start umbra-net
+
+on property:persist.umbra.net.discovery_drop=*
+    start umbra-net

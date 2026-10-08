@@ -85,5 +85,6 @@ prebuilt vendor image cannot add the vendor policy this way.
 | File | Purpose |
 |---|---|
 | `umbra-net.sh` | The service: reads the requests, writes the rules, reports the result |
-| `umbra-net.rc` | When init starts it: on `netd` start and whenever a request changes |
+| `umbra-net.rc` | Defines the service (vendor side) |
+| `umbra-net-triggers.rc` | When init starts it: on `netd` start and whenever a request changes (system side, because vendor `.rc` files may not trigger on these properties) |
 | `sepolicy/` | The SELinux policy, in the three directories described above |

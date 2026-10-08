@@ -16,6 +16,10 @@ init_daemon_domain(umbra_net)
 allow umbra_net vendor_shell_exec:file rx_file_perms;
 allow umbra_net vendor_toolbox_exec:file rx_file_perms;
 
+# The wrapper inherits this script's stdin/stdout/stderr when it is run. Without
+# this it starts in its own domain and is then refused its own output streams.
+allow netutils_wrapper umbra_net:fd use;
+
 # Read what is wanted; report what was applied.
 get_prop(umbra_net, umbra_net_prop)
 set_prop(umbra_net, umbra_net_status_prop)
