@@ -121,13 +121,21 @@ app. It reacts to `persist.umbra.kernel.harden`:
 
 | Request | What init does |
 |---|---|
-| `1` | Re-asserts `kptr_restrict=2`, `randomize_va_space=2` and `suid_dumpable=0` (the values Android's own init sets at boot, in case something lowered one), and sets `security.perf_harden=1`, Android's switch for locking down perf events |
-| `0` | Sets `security.perf_harden` back to the value the app recorded in `persist.umbra.kernel.prior_perf_harden` |
+| `1` | Re-asserts `kptr_restrict=2`, `randomize_va_space=2` and `suid_dumpable=0` (the values Android's own init sets at boot, in case something lowered one), and sets `perf_event_paranoid=3` |
+| `0` | Sets `perf_event_paranoid` back to the value the app recorded in `persist.umbra.kernel.prior_perf_paranoid` |
 
-The app cannot read three of those four back. It can read
-`kernel.perf_event_paranoid`, which the perf switch drives and which init sets
-in the same action, so it reads that as proof the action ran and reports the
-capability as enforced only when it is 3.
+Modern Android leaves `perf_event_paranoid` at -1 and controls `perf_event_open`
+with SELinux alone; 3 adds the sysctl back as a second lock. Profilers such as
+simpleperf stop working while it is set.
+
+The app cannot read three of those four sysctls back. It can read
+`perf_event_paranoid`, which init sets in the same action, so it reads that as
+proof the action ran and reports the capability as enforced only when it is 3.
+
+During boot, Android's own init writes `perf_event_paranoid=-1` after persistent
+properties have loaded. The file has a second action on that same boot trigger,
+which runs afterwards, so a posture that was active before a reboot comes back
+hardened.
 
 Three parts of the Linux build's list are not applied on Android, on purpose:
 `dmesg_restrict` and the ptrace scope, because SELinux already denies every app

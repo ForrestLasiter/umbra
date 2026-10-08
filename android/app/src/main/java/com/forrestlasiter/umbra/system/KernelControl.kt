@@ -13,8 +13,8 @@ import java.io.File
  * (android/os-integration/).
  *
  * How it stays honest when it cannot read most of what it set: one sysctl in the
- * same group, kernel.perf_event_paranoid, IS readable by apps. init sets it in
- * the same action as the others, so reading it back as 3 proves the action ran.
+ * same group, kernel.perf_event_paranoid, IS readable by apps. init sets it to 3
+ * in the same action as the others, so reading 3 back proves the action ran.
  * enforce() reports success only after seeing that.
  *
  * What Android does not need from us: dmesg and ptrace are already denied to
@@ -23,8 +23,9 @@ import java.io.File
  * multi-network routing depends on it being off.
  *
  * Restore: the three init-only values are the ones Android itself sets at every
- * boot, so re-asserting them changes nothing that needs undoing. The perf
- * lockdown is the one real change, and its prior state is recorded and put back.
+ * boot, so re-asserting them changes nothing that needs undoing.
+ * perf_event_paranoid is the one real change (modern Android leaves it at -1 and
+ * relies on SELinux alone), so its prior value is recorded and put back.
  */
 class KernelControl(
     private val props: PropertyStore = OsProperties,
@@ -37,45 +38,41 @@ class KernelControl(
     /** The OS's .rc file announces itself; without it nothing would react. */
     override fun available(): Boolean = props.get(HOOK_KEY) == ON && perfParanoid() != null
 
-    /** "<was the request on>,<was perf hardened>", e.g. "0,0". */
+    /** "<was the request on>,<perf_event_paranoid then>", e.g. "0,-1". */
     override fun snapshot(): String? {
         if (!available()) return null
-        return "${requested()},${perfHardened() ?: return null}"
+        return "${requested()},${perfParanoid() ?: return null}"
     }
 
     override fun enforce(): Boolean {
-        // First time only: tell init what perf hardening to go back to. On a
-        // re-assert (already requested) the recorded value must not be
-        // overwritten with the hardened state we created.
+        // First time only: tell init what value to go back to. On a re-assert
+        // (already requested) the recorded value must not be overwritten with
+        // the hardened one we created.
         if (requested() != ON) {
-            val prior = perfHardened() ?: return false
-            if (!props.set(PRIOR_PERF_KEY, prior)) return false
+            val prior = perfParanoid() ?: return false
+            if (!props.set(PRIOR_PERF_KEY, prior.toString())) return false
         }
         if (!props.set(REQUEST_KEY, ON)) return false
-        return waitFor { perfHardened() == ON }
+        return waitFor { perfParanoid() == HARDENED_PARANOID }
     }
 
     override fun restore(prior: String): Boolean {
-        val (wasRequested, wasPerfHardened) = prior.split(',').let {
-            if (it.size != 2) return false
-            it[0] to it[1]
-        }
+        val parts = prior.split(',')
+        if (parts.size != 2) return false
+        val wasRequested = parts[0]
+        val priorParanoid = parts[1].toIntOrNull() ?: return false
         if (wasRequested == ON) return true          // it was already ours to hold
-        if (!props.set(PRIOR_PERF_KEY, wasPerfHardened)) return false
+        if (!props.set(PRIOR_PERF_KEY, priorParanoid.toString())) return false
         if (!props.set(REQUEST_KEY, OFF)) return false
-        return waitFor { perfHardened() == wasPerfHardened }
+        return waitFor { perfParanoid() == priorParanoid }
     }
 
-    override fun isEnforced(): Boolean? = perfHardened()?.let { it == ON }
+    override fun isEnforced(): Boolean? = perfParanoid()?.let { it >= HARDENED_PARANOID }
 
     override fun diagnostic(): String =
         "kernel.perf_event_paranoid is ${perfParanoid()}; expected $HARDENED_PARANOID after init hardened"
 
     private fun requested(): String = if (props.get(REQUEST_KEY) == ON) ON else OFF
-
-    /** "1" when perf events are locked down, "0" when not, null if unreadable. */
-    private fun perfHardened(): String? =
-        perfParanoid()?.let { if (it >= HARDENED_PARANOID) ON else OFF }
 
     private fun waitFor(condition: () -> Boolean): Boolean {
         repeat(ATTEMPTS) {
@@ -88,7 +85,7 @@ class KernelControl(
     companion object {
         const val HOOK_KEY = "umbra.kernel.hook"
         const val REQUEST_KEY = "persist.umbra.kernel.harden"
-        const val PRIOR_PERF_KEY = "persist.umbra.kernel.prior_perf_harden"
+        const val PRIOR_PERF_KEY = "persist.umbra.kernel.prior_perf_paranoid"
         const val ON = "1"
         const val OFF = "0"
         const val HARDENED_PARANOID = 3

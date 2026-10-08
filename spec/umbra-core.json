@@ -226,7 +226,7 @@
         },
         "kernel": {
           "level": "enforced",
-          "reason": "asks init to assert the pointer/ASLR/core-dump sysctls and lock down perf events; the perf sysctl is read back as proof, the rest are readable only by init"
+          "reason": "asks init to assert the pointer/ASLR/core-dump sysctls and set perf_event_paranoid=3; that one is read back as proof, the rest are readable only by init"
         },
         "mac": {
           "level": "enforced",

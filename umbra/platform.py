@@ -127,7 +127,7 @@ CAPABILITY_SUPPORT: dict[Platform, dict[str, tuple[Enforcement, str]]] = {
 # listed is inherited unchanged from the `android` row -- so this matrix never
 # advertises a control that does not exist yet. It grows one slice at a time.
 _ANDROID_SYSTEM_OVERRIDES: dict[str, tuple[Enforcement, str]] = {
-    "kernel":       (_E.ENFORCED, "asks init to assert the pointer/ASLR/core-dump sysctls and lock down perf events; the perf sysctl is read back as proof, the rest are readable only by init"),
+    "kernel":       (_E.ENFORCED, "asks init to assert the pointer/ASLR/core-dump sysctls and set perf_event_paranoid=3; that one is read back as proof, the rest are readable only by init"),
     "firewall":     (_E.ENFORCED, "default-deny inbound packet filter, applied by the OS's umbra-net service and read back before it is reported"),
     "discovery":    (_E.ENFORCED, "drops outbound mDNS/LLMNR/SSDP/NetBIOS/WS-Discovery packets in the OS packet filter"),
     "telemetry":    (_E.ENFORCED, "the OS resolver answers blocklisted domains from a built-in hosts sinkhole, on any DNS transport and without the VPN slot"),

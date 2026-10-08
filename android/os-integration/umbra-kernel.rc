@@ -4,19 +4,21 @@
 # and no other service can, whatever it is signed with. So the app asks through a
 # property and init does the work here.
 #
-#   persist.umbra.kernel.harden=1             harden now
-#   persist.umbra.kernel.harden=0             stop holding it
-#   persist.umbra.kernel.prior_perf_harden    what perf hardening was before
+#   persist.umbra.kernel.harden=1               harden now
+#   persist.umbra.kernel.harden=0               stop holding it
+#   persist.umbra.kernel.prior_perf_paranoid    perf_event_paranoid before hardening
 #
 # What "harden" does:
 #   - re-asserts the three values Android's own init.rc sets at every boot
 #     (hidden kernel pointers, full ASLR, no setuid core dumps), in case a
 #     profiling tool lowered one since. They are the OS's normal values, so
 #     there is nothing to put back afterwards.
-#   - turns on Android's perf-event lockdown. security.perf_harden is the OS's
-#     own switch for this; init-perfetto.rc reacts by writing
-#     kernel.perf_event_paranoid=3. That sysctl is the one of the set an app CAN
-#     read, so the app reads it back as proof that this action ran.
+#   - sets kernel.perf_event_paranoid to 3, closing perf_event_open to
+#     unprivileged code. Modern Android leaves this sysctl at -1 and relies on
+#     SELinux alone; 3 adds the sysctl back as a second lock. This is the one
+#     value of the set an app CAN read, so the app reads it back as proof that
+#     this action ran. Profilers (simpleperf, perfetto's CPU profiling) stop
+#     working while it is set.
 #
 # Deliberately not here: dmesg and ptrace are already denied to every app by
 # SELinux on Android, and reverse-path filtering must stay off because Android's
@@ -30,9 +32,15 @@ on property:persist.umbra.kernel.harden=1
     write /proc/sys/kernel/kptr_restrict 2
     write /proc/sys/kernel/randomize_va_space 2
     write /proc/sys/fs/suid_dumpable 0
-    setprop security.perf_harden 1
+    write /proc/sys/kernel/perf_event_paranoid 3
 
-# Put perf hardening back to what the app recorded before it hardened. If it
-# recorded nothing, stay hardened, which is also Android's default.
+# During boot Android's own init-perfetto.rc writes perf_event_paranoid=-1 on
+# this same trigger, after persist properties have loaded. This file is parsed
+# later than that one, so this action runs after it and the hardened value wins.
+on load-bpf-programs && property:persist.umbra.kernel.harden=1
+    write /proc/sys/kernel/perf_event_paranoid 3
+
+# Put perf_event_paranoid back to what the app recorded before it hardened. If
+# it recorded nothing, stay hardened.
 on property:persist.umbra.kernel.harden=0
-    setprop security.perf_harden ${persist.umbra.kernel.prior_perf_harden:-1}
+    write /proc/sys/kernel/perf_event_paranoid ${persist.umbra.kernel.prior_perf_paranoid:-3}
