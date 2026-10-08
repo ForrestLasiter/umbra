@@ -31,6 +31,9 @@ interface SystemControl {
      */
     fun available(): Boolean = true
 
+    /** What the control last observed, for the log when something fails. */
+    fun diagnostic(): String? = null
+
     /** The current state, or null if it cannot be read (then nothing is changed). */
     fun snapshot(): String?
 

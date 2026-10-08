@@ -69,9 +69,16 @@ object SystemPosture {
             Log.w(TAG, "unknown profile '$profile'; nothing changed")
             return null
         }
-        val outcomes = applier(app).apply(spec, profile, SystemMode.platform(app))
-        outcomes.forEach {
-            Log.i(TAG, "profile=$profile ${it.capability}: ${it.change}${if (it.ok) "" else " FAILED"}")
+        val controls = controls(app)
+        val outcomes = PostureApplier(controls, PrefsSnapshotStore(app))
+            .apply(spec, profile, SystemMode.platform(app))
+        outcomes.forEach { outcome ->
+            Log.i(TAG, "profile=$profile ${outcome.capability}: ${outcome.change}${if (outcome.ok) "" else " FAILED"}")
+            // A failure with no reason is no use to anyone reading the log.
+            if (!outcome.ok) {
+                controls.firstOrNull { it.capability == outcome.capability }?.diagnostic()
+                    ?.let { Log.w(TAG, "  ${outcome.capability}: $it") }
+            }
         }
         return outcomes
     }

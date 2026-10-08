@@ -64,9 +64,15 @@ class TelemetryControl(
     /** True only when the canary resolves, and only to unspecified addresses. */
     override fun isEnforced(): Boolean? {
         val domain = canary ?: return null
-        val addresses = resolve(domain) ?: return false
-        return addresses.isNotEmpty() && addresses.all { it in UNSPECIFIED }
+        val addresses = resolve(domain)
+        lastAnswer = addresses
+        return addresses != null && addresses.isNotEmpty() && addresses.all { it in UNSPECIFIED }
     }
+
+    private var lastAnswer: List<String>? = null
+
+    override fun diagnostic(): String =
+        "$canary resolved to ${lastAnswer ?: "nothing (lookup failed)"}; expected only $UNSPECIFIED"
 
     companion object {
         const val SUPPORT_KEY = "ro.umbra.dns_sinkhole"
