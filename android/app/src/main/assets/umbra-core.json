@@ -241,8 +241,8 @@
           "reason": "route all traffic through Tor via a VPNService packet tunnel"
         },
         "webcam_off": {
-          "level": "advisory",
-          "reason": "no module unload; guide to the OS camera kill-switch / permission revoke"
+          "level": "enforced",
+          "reason": "sets the system 'no camera' user restriction, which blocks the camera for every app and survives a reboot"
         },
         "wireguard": {
           "level": "requires_entitlement",

@@ -30,6 +30,7 @@ object SystemMode {
         "android.permission.WRITE_SECURE_SETTINGS",  // MAC randomization flag
         "android.permission.NETWORK_SETTINGS",       // DHCP hostname restriction
         "android.permission.BLUETOOTH_PRIVILEGED",   // turn the radio off without a prompt
+        "android.permission.MANAGE_USERS",           // the "no camera" user restriction
     )
 
     /** Pure decision, kept separate from Android so it is unit-testable. */

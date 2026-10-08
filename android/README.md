@@ -62,6 +62,7 @@ ordinary app can never get, and plans against a second row of the core matrix,
 | mac | advisory | **enforced** - forces a fresh random Wi-Fi MAC per connection |
 | hostname | advisory | **enforced** - stops the device name being sent over DHCP |
 | bluetooth_off | advisory | **enforced** - turns the radio off, restores it afterwards |
+| webcam_off | advisory | **enforced** - sets the OS "no camera" restriction for every app |
 | everything else | as above | unchanged until its system control is written |
 
 The matrix only lists a capability as enforced once its control exists, so this
@@ -72,7 +73,7 @@ How it fits together:
 - `system/SystemMode` decides which row applies by checking whether the system
   permissions were actually granted. One missing permission means "ordinary app".
 - `system/SystemControl` is the contract every control keeps: `snapshot`,
-  `enforce`, `restore`. `system/Controls.kt` holds the three implementations.
+  `enforce`, `restore`. `system/Controls.kt` holds the implementations.
 - `system/PostureApplier` reconciles the controls to a profile. It stores each
   control's prior state **before** changing it and restores only from that
   record, so `normal` returns the phone to exactly how it was - the same

@@ -21,6 +21,7 @@ object SystemPosture {
     private fun controls(context: Context): List<SystemControl> = listOf(
         MacControl(context),
         BluetoothControl(context),
+        CameraControl(context),
         HostnameControl(context),
     )
 

@@ -21,6 +21,8 @@
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.BLUETOOTH_PRIVILEGED"
         tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.MANAGE_USERS"
+        tools:ignore="ProtectedPermissions" />
     <!-- Runtime permission; an OS build pre-grants it. Needed to switch the radio. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 

@@ -130,6 +130,7 @@ _ANDROID_SYSTEM_OVERRIDES: dict[str, tuple[Enforcement, str]] = {
     "hostname":     (_E.ENFORCED, "sets the Wi-Fi restriction that stops the device name being sent over DHCP, on open and secured networks"),
     "mac":          (_E.ENFORCED, "forces a fresh random Wi-Fi MAC per connection on every network that randomizes (Android's default)"),
     "bluetooth_off":(_E.ENFORCED, "turns the Bluetooth radio off with the privileged adapter API"),
+    "webcam_off":   (_E.ENFORCED, "sets the system 'no camera' user restriction, which blocks the camera for every app and survives a reboot"),
 }
 CAPABILITY_SUPPORT[Platform.ANDROID_SYSTEM] = {
     **CAPABILITY_SUPPORT[Platform.ANDROID],

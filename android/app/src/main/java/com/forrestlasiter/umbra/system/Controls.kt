@@ -4,6 +4,7 @@ import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.net.wifi.WifiManager
+import android.os.UserManager
 import android.provider.Settings
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
@@ -113,6 +114,59 @@ class HostnameControl(context: Context) : SystemControl {
         // WifiManager.FLAG_SEND_DHCP_HOSTNAME_RESTRICTION_OPEN | _SECURE
         const val RESTRICT_ALL = (1 shl 0) or (1 shl 1)
         const val QUERY_TIMEOUT_MS = 2000L
+    }
+}
+
+/**
+ * webcam_off -- "Disable the camera at the device level."
+ *
+ * Linux unloads the camera's kernel module. A phone cannot do that, but Android
+ * has a user restriction, "no_camera", that the OS itself enforces: while it is
+ * set, the camera app-op is denied for EVERY app, so nothing can open any camera.
+ * The restriction is stored by the system, so it survives a reboot and does not
+ * depend on Umbra's process staying alive -- which is why this was chosen over
+ * the alternatives that are either reserved for other system roles or last only
+ * as long as the process that set them.
+ *
+ * If something else (a work-profile admin, say) had already restricted the
+ * camera, we record that and never touch it: enforce has nothing to do, and
+ * restore must not lift a restriction that was not ours.
+ */
+class CameraControl(context: Context) : SystemControl {
+
+    override val capability = "webcam_off"
+    private val users: UserManager? = context.getSystemService(UserManager::class.java)
+
+    override fun snapshot(): String? = restricted()?.let { if (it) RESTRICTED else ALLOWED }
+
+    override fun enforce(): Boolean = when (restricted()) {
+        null -> false
+        true -> true                  // already off; nothing to change
+        false -> set(true)
+    }
+
+    override fun restore(prior: String): Boolean =
+        if (prior == ALLOWED) set(false) else true
+
+    override fun isEnforced(): Boolean? = restricted()
+
+    private fun restricted(): Boolean? = users?.userRestrictions?.getBoolean(NO_CAMERA)
+
+    @Suppress("DEPRECATION")   // deprecated in favour of device-admin APIs, which need an admin; a system app uses this
+    private fun set(value: Boolean): Boolean {
+        val manager = users ?: return false
+        return try {
+            manager.setUserRestriction(NO_CAMERA, value)
+            true
+        } catch (e: SecurityException) {
+            false   // not a system build
+        }
+    }
+
+    private companion object {
+        const val NO_CAMERA = "no_camera"   // UserManager.DISALLOW_CAMERA (hidden constant)
+        const val RESTRICTED = "restricted"
+        const val ALLOWED = "allowed"
     }
 }
 
