@@ -62,6 +62,23 @@ class TorControlTest {
         assertEquals(false, control.isEnforced())
     }
 
+    @Test fun re_asserting_a_posture_that_holds_does_not_restart_tor() {
+        val control = tor()
+        control.enforce()
+        alwaysOn.events.clear()
+        assertTrue(control.enforce())
+        assertTrue(alwaysOn.events.isEmpty())
+    }
+
+    @Test fun re_asserting_after_tor_stopped_pins_it_again_so_android_restarts_it() {
+        val control = tor()
+        control.enforce()
+        orbot.vpnUp = false
+        alwaysOn.events.clear()
+        assertTrue(control.enforce())
+        assertEquals(listOf("always-on=$TOR_APP lockdown=true"), alwaysOn.events)
+    }
+
     @Test fun restore_puts_back_what_was_there_before() {
         alwaysOn.app = "com.example.vpn"
         val control = tor()

@@ -83,6 +83,9 @@ class TorControl(
     }
 
     override fun enforce(): Boolean {
+        // Already holding (a re-assert): leave it be. Pinning again would make
+        // Android restart the Tor app's VPN and drop every open connection.
+        if (isEnforced() == true) return true
         if (!slot.claim()) return false
         // Pinning is the whole action: Android starts the Tor app's VPN itself,
         // and from this call on nothing leaves outside it.
