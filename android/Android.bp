@@ -59,6 +59,14 @@ prebuilt_etc {
     system_ext_specific: true,
 }
 
+// Every source file both ways of building share: all of the app except the one
+// file that talks to the WireGuard library (see the comment on `srcs` below).
+filegroup {
+    name: "umbra-shared-srcs",
+    srcs: ["app/src/main/java/**/*.kt"],
+    exclude_srcs: ["app/src/main/java/com/forrestlasiter/umbra/wg/WireGuardBackend.kt"],
+}
+
 android_app {
     name: "Umbra",
     required: [
@@ -78,13 +86,9 @@ android_app {
     //     `umbra-wireguard-tunnel` and sets the Soong config variable
     //     umbra.wireguard_tunnel to "true", build the real backend against it.
     //     See os-integration/README.md.
-    srcs: ["app/src/main/java/**/*.kt"] + select(soong_config_variable("umbra", "wireguard_tunnel"), {
-        "true": [],
+    srcs: [":umbra-shared-srcs"] + select(soong_config_variable("umbra", "wireguard_tunnel"), {
+        "true": ["app/src/main/java/com/forrestlasiter/umbra/wg/WireGuardBackend.kt"],
         default: ["platform/src/**/*.kt"],
-    }),
-    exclude_srcs: select(soong_config_variable("umbra", "wireguard_tunnel"), {
-        "true": [],
-        default: ["app/src/main/java/com/forrestlasiter/umbra/wg/WireGuardBackend.kt"],
     }),
 
     resource_dirs: ["app/src/main/res"],
