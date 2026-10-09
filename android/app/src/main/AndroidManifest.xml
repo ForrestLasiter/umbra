@@ -39,6 +39,12 @@
     <!-- Runtime permission; an OS build pre-grants it. Needed to switch the radio. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
+    <!-- Tor is provided by Orbot. Without this, Android hides whether it is
+         installed, and Umbra would report Tor as missing when it is not. -->
+    <queries>
+        <package android:name="org.torproject.android" />
+    </queries>
+
     <application
         android:name=".UmbraApp"
         android:allowBackup="false"

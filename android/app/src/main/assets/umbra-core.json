@@ -237,8 +237,8 @@
           "reason": "the OS resolver answers blocklisted domains from a built-in hosts sinkhole, on any DNS transport and without the VPN slot"
         },
         "tor": {
-          "level": "requires_vpn_profile",
-          "reason": "route all traffic through Tor via a VPNService packet tunnel"
+          "level": "enforced",
+          "reason": "pins Orbot (the Tor Project's app) as Android's always-on VPN with lockdown and no consent dialog, so traffic leaves through Tor or not at all; needs Orbot in the OS image"
         },
         "webcam_off": {
           "level": "enforced",
@@ -314,7 +314,7 @@
   },
   "profiles": {
     "home": {
-      "description": "Sane hardening for a trusted LAN. Blocks telemetry and local discovery, raises a stealth firewall, and randomizes the MAC per network \u00e2\u20ac\u201d while staying usable (no killswitch, no radios off).\n",
+      "description": "Sane hardening for a trusted LAN. Blocks telemetry and local discovery, raises a stealth firewall, and randomizes the MAC per network \u2014 while staying usable (no killswitch, no radios off).\n",
       "fail_mode": "open",
       "requires": [
         "firewall",
@@ -377,7 +377,7 @@
       }
     },
     "normal": {
-      "description": "Baseline. Every control off / asserting nothing. Applying this profile is the supported way to \"return the machine to stock\" \u00e2\u20ac\u201d it restores the snapshots of whatever the previously active profile changed.\n",
+      "description": "Baseline. Every control off / asserting nothing. Applying this profile is the supported way to \"return the machine to stock\" \u2014 it restores the snapshots of whatever the previously active profile changed.\n",
       "fail_mode": "open",
       "requires": [],
       "telemetry_blocklists": [],

@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.forrestlasiter.umbra.core.SpecRepository
+import com.forrestlasiter.umbra.tor.OrbotHelper
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -22,17 +23,26 @@ object SystemPosture {
      * The controls this build has, in apply order. Radios and identity go last,
      * matching the Linux engine's APPLY_ORDER (raise walls first, radios last).
      */
-    private fun controls(context: Context): List<SystemControl> = listOf(
-        KernelControl(),
-        TelemetryControl(canary = canaryDomain(context)),
-        FirewallControl(),
-        DiscoveryControl(),
-        WireGuardControl(context),
-        MacControl(context),
-        BluetoothControl(context),
-        CameraControl(context),
-        HostnameControl(context),
-    )
+    private fun controls(context: Context): List<SystemControl> {
+        // WireGuard and Tor share Android's one always-on VPN setting.
+        val vpnSlot = VpnSlot(
+            SystemAlwaysOnVpn(context), PrefsSnapshotStore(context),
+            claimants = setOf(context.packageName, OrbotHelper.ORBOT_PACKAGE),
+        )
+        return listOf(
+            KernelControl(),
+            TelemetryControl(canary = canaryDomain(context)),
+            FirewallControl(),
+            DiscoveryControl(),
+            WireGuardControl(context, vpnSlot),
+            MacControl(context),
+            BluetoothControl(context),
+            CameraControl(context),
+            HostnameControl(context),
+            // Last: it waits for Tor to connect, and nothing else should wait on that.
+            TorControl(context, vpnSlot),
+        )
+    }
 
     /**
      * Capabilities the matrix promises on a system build but that this particular

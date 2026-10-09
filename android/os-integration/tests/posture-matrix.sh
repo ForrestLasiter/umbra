@@ -40,6 +40,10 @@ skipped=0
 r() { if [ "$ROOT" = 1 ]; then g "$@"; else echo "n/a"; fi; }
 # A name from Umbra's telemetry blocklist, to prove the sinkhole by resolving it.
 CANARY=analytics.google.com
+# The app that provides Tor. If the OS build includes it, `paranoid` must route
+# through it; if not, Umbra must say Tor is unavailable and the rest still holds.
+TOR_APP=org.torproject.android
+TOR=0
 
 apply() {
     local out
@@ -88,11 +92,11 @@ value() { echo "$1" | sed -n "s/^$2=//p"; }
 # What each profile must show, checked against the live system.
 expect() {   # $1 = profile
     local s; s=$(snapshot)
-    local hard=0 bt=1 cam=0 vpn=0
+    local hard=0 bt=1 cam=0 vpn=0 owner=null tor=0
     case "$1" in
         home)     hard=1 ;;
-        travel)   hard=1; bt=0; [ -n "$CONF" ] && vpn=1 ;;
-        paranoid) hard=1; bt=0; cam=1 ;;
+        travel)   hard=1; bt=0; [ -n "$CONF" ] && { vpn=1; owner=$U; } ;;
+        paranoid) hard=1; bt=0; cam=1; [ "$TOR" = 1 ] && { vpn=1; owner=$TOR_APP; tor=1; } ;;
     esac
     if [ "$hard" = 1 ]; then
         check "perf_event_paranoid"        "$(value "$s" perf_event_paranoid)" 3
@@ -115,16 +119,45 @@ expect() {   # $1 = profile
     check "camera blocked" "$c" "$cam"
     check "vpn_lockdown" "$(value "$s" vpn_lockdown)" "$vpn"
     check "tunnel_iface" "$(value "$s" tunnel_iface)" "$vpn"
+    # WireGuard and Tor share the one always-on slot; it must belong to the right one.
+    check "always_on_vpn" "$(value "$s" always_on_vpn)" "$owner"
+    if [ "$tor" = 1 ]; then
+        # Tor carries TCP only, so ping proves nothing here. Ask the Tor
+        # Project's own check service where this phone appears to come from.
+        g "curl -s --max-time 45 https://check.torproject.org/api/ip" | grep -q '"IsTor":true' &&
+            ok "exit address is a Tor exit" || bad "exit address is NOT a Tor exit under $1"
+        [ "$(g "curl -s -o /dev/null -w '%{http_code}' --max-time 45 https://example.org")" = 200 ] &&
+            ok "internet reachable and names resolve, through Tor" || bad "internet NOT reachable through Tor under $1"
+        return
+    fi
     # The network must still work under every profile (through the tunnel, if any).
     g "ping -c 2 -W 3 9.9.9.9" | grep -q " 0% packet loss" && ok "internet reachable" || bad "internet NOT reachable under $1"
     # ...and name resolution too, since three controls touch DNS or the firewall.
     g "ping -c 1 -W 3 example.org" | grep -q "1 received" && ok "names resolve" || bad "names do NOT resolve under $1"
 }
 
+# Reboot with a posture active: it must come back by itself and audit clean.
+reboot_under() {   # $1 = profile
+    echo "== reboot (under $1)"
+    apply "$1"
+    timeout 20 adb reboot; sleep 10
+    adb wait-for-device
+    for _ in $(seq 1 300); do
+        [ "$(timeout 5 adb shell getprop sys.boot_completed 2>/dev/null | tr -d '[:cntrl:]')" = "1" ] && break
+        sleep 1
+    done
+    sleep "$2"
+    adb root > /dev/null 2>&1; sleep 3; adb wait-for-device
+    expect "$1"
+    audit
+}
+
 adb root > /dev/null 2>&1; sleep 3; adb wait-for-device
 [ "$(g id -u)" = "0" ] && ROOT=1
 echo "== device: $(g getprop ro.build.fingerprint)"
 echo "   build type $(g getprop ro.build.type), SELinux $(g getenforce), adb root: $([ "$ROOT" = 1 ] && echo yes || echo "no (root-only checks will be skipped)")"
+[ -n "$(g pm list packages $TOR_APP)" ] && TOR=1
+echo "   Tor app in this build: $([ "$TOR" = 1 ] && echo yes || echo "no (paranoid runs without Tor)")"
 g svc bluetooth enable > /dev/null; sleep 6      # so bluetooth_off has something to turn off
 apply normal > /dev/null
 
@@ -157,19 +190,10 @@ case "$out" in *"DRIFTED: mac"*) ok "audit noticed the changed setting" ;; *) ba
 apply paranoid
 audit
 
-# Reboot with a posture active: it must come back by itself and audit clean.
-echo "== reboot (under home)"
-apply home
-timeout 20 adb reboot; sleep 10
-adb wait-for-device
-for i in $(seq 1 300); do
-    [ "$(timeout 5 adb shell getprop sys.boot_completed 2>/dev/null | tr -d '[:cntrl:]')" = "1" ] && break
-    sleep 1
-done
-sleep 30
-adb root > /dev/null 2>&1; sleep 3; adb wait-for-device
-expect home
-audit
+reboot_under home 30
+# With Tor, the killswitch and the Tor app must both come back after a reboot,
+# with nobody opening anything. Tor needs longer to reconnect than a setting does.
+[ "$TOR" = 1 ] && reboot_under paranoid 60
 
 # Two changes requested at the same moment (the tile and a script, say). They are
 # meant to run one after the other on a single thread, never interleaved, so the

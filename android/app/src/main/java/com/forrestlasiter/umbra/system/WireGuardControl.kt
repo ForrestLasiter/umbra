@@ -96,14 +96,14 @@ class SystemAlwaysOnVpn(context: Context) : AlwaysOnVpn {
 
 class WireGuardControl(
     private val packageName: String,
-    private val alwaysOn: AlwaysOnVpn,
+    private val slot: VpnSlot,
     private val tunnel: WireGuardTunnel,
     private val config: () -> String?,
 ) : SystemControl {
 
-    constructor(context: Context) : this(
+    constructor(context: Context, slot: VpnSlot) : this(
         packageName = context.packageName,
-        alwaysOn = SystemAlwaysOnVpn(context),
+        slot = slot,
         tunnel = Tunnels.wireGuard(context),
         config = { WgConfigStore(context).load() },
     )
@@ -114,52 +114,68 @@ class WireGuardControl(
 
     override fun unavailableReason(): String? = when {
         !tunnel.bundled -> "this OS build does not include a WireGuard tunnel"
-        alwaysOn.current() == null -> "this OS build does not let Umbra manage the always-on VPN"
+        slot.current() == null -> "this OS build does not let Umbra manage the always-on VPN"
         config() == null -> "no WireGuard config imported yet; import one in the Umbra app"
         else -> null
     }
 
-    /** "<always-on app or empty>|<lockdown>", e.g. "|false" or "com.example.vpn|true". */
+    /**
+     * "<always-on app or empty>|<lockdown>", e.g. "|false" or "com.example.vpn|true".
+     * Informational: the shared [VpnSlot] ledger is what restore uses, because the
+     * Tor control claims the same setting.
+     */
     override fun snapshot(): String? {
         if (!available()) return null
-        val (app, lockdown) = alwaysOn.current() ?: return null
+        val (app, lockdown) = slot.current() ?: return null
         return "${app.orEmpty()}|$lockdown"
     }
 
     override fun enforce(): Boolean {
         val text = config() ?: return false
-        if (!alwaysOn.authorize(packageName)) return false
+        if (!slot.claim()) return false
+        val holder = slot.current()?.first
+        if (holder != null && holder != packageName) {
+            // Another app is the always-on VPN (the Tor app, on a switch from a
+            // Tor profile). Android refuses to start any other VPN while that
+            // holds, so take the slot first. Lockdown moves straight from that
+            // app to this one; if the tunnel then fails the phone is offline
+            // behind the killswitch, which is what a fail-closed profile means.
+            if (!slot.pin(packageName)) return false
+            if (!tunnel.isUp && !bringUp(text)) return false
+            return isEnforced() == true
+        }
         // Tunnel first, lockdown second: bringing the tunnel up needs no network
         // by itself, and this order never leaves lockdown pointing at nothing.
-        if (!tunnel.isUp) {
-            try { tunnel.up(text) } catch (e: Exception) { lastError = e.message ?: e.toString(); return false }
-        }
-        if (!alwaysOn.set(packageName, lockdown = true)) return false
+        if (!tunnel.isUp && !bringUp(text)) return false
+        if (!slot.pin(packageName)) return false
         return isEnforced() == true
     }
 
+    private fun bringUp(text: String): Boolean = try {
+        tunnel.up(text)
+        true
+    } catch (e: Exception) {
+        lastError = e.message ?: e.toString()
+        false
+    }
+
     override fun restore(prior: String): Boolean {
-        val parts = prior.split('|')
-        if (parts.size != 2) return false
-        val priorApp = parts[0].ifEmpty { null }
-        val priorLockdown = parts[1].toBoolean()
-        if (priorApp == packageName && priorLockdown) return true   // already ours before; leave it
         // Lockdown off first, then the tunnel: the other order would strand the
         // phone offline behind a killswitch with no tunnel.
-        val settingRestored = alwaysOn.set(priorApp, priorLockdown)
+        val released = slot.release(packageName)
         try { tunnel.down() } catch (e: Exception) { lastError = e.message ?: e.toString() }
-        return settingRestored && !tunnel.isUp
+        return released && !tunnel.isUp
     }
 
     override fun isEnforced(): Boolean? {
-        val (app, lockdown) = alwaysOn.current() ?: return null
-        return tunnel.isUp && lockdown && app == packageName
+        val pinned = slot.pinnedTo(packageName) ?: return null
+        return tunnel.isUp && pinned
     }
 
     private var lastError: String? = null
 
     override fun diagnostic(): String {
-        val setting = alwaysOn.current()
+        val setting = slot.current()
         return "tunnel up=${tunnel.isUp}, always-on app=${setting?.first}, lockdown=${setting?.second}" +
             (lastError?.let { ", last error: $it" } ?: "")
     }

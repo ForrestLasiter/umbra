@@ -32,11 +32,24 @@ class PostureApplier(
     private val store: SnapshotStore,
 ) {
 
-    /** Bring every control in line with [wanted]. Never throws; reports per control. */
-    fun reconcile(wanted: Set<String>): List<Outcome> = controls.map { control ->
+    /**
+     * Bring every control in line with [wanted]. Never throws; reports per control.
+     *
+     * Wanted controls are enforced BEFORE dropped ones are restored. Controls are
+     * independent except where two share one OS setting (the always-on VPN): there
+     * the new holder must take over before the old one lets go, or a switch
+     * between two killswitch profiles would have a moment with no killswitch.
+     */
+    fun reconcile(wanted: Set<String>): List<Outcome> {
+        val (keep, drop) = controls.partition { it.capability in wanted }
+        val outcomes = (keep + drop).associate { it.capability to reconcileOne(it, wanted) }
+        return controls.map { outcomes.getValue(it.capability) }
+    }
+
+    private fun reconcileOne(control: SystemControl, wanted: Set<String>): Outcome {
         val cap = control.capability
         val prior = store.get(cap)
-        when {
+        return when {
             // Wanted but impossible here: change nothing and say so. (If we hold
             // a snapshot from before, fall through and keep/restore as usual --
             // an unavailable control must never strand a setting we changed.)

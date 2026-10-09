@@ -14,26 +14,7 @@ import org.junit.Test
  */
 class WireGuardControlTest {
 
-    private val us = "com.forrestlasiter.umbra"
-
-    private class FakeAlwaysOn(
-        var app: String? = null,
-        var lockdown: Boolean = false,
-        val events: MutableList<String>,
-        var readable: Boolean = true,
-        var refuseSet: Boolean = false,
-    ) : AlwaysOnVpn {
-        var authorized: String? = null
-        override fun authorize(packageName: String): Boolean { authorized = packageName; return true }
-        override fun current(): Pair<String?, Boolean>? = if (readable) app to lockdown else null
-        override fun set(packageName: String?, lockdown: Boolean): Boolean {
-            if (refuseSet) return false
-            events += "always-on=$packageName lockdown=$lockdown"
-            app = packageName
-            this.lockdown = lockdown
-            return true
-        }
-    }
+    private val us = UMBRA_APP
 
     private class FakeTunnel(
         override val bundled: Boolean = true,
@@ -51,7 +32,7 @@ class WireGuardControlTest {
 
     private val events = mutableListOf<String>()
     private fun control(alwaysOn: FakeAlwaysOn, tunnel: FakeTunnel, config: String? = "[Interface]") =
-        WireGuardControl(us, alwaysOn, tunnel, { config })
+        WireGuardControl(us, vpnSlot(alwaysOn), tunnel, { config })
 
     @Test fun enforce_brings_the_tunnel_up_before_turning_lockdown_on() {
         val alwaysOn = FakeAlwaysOn(events = events)
@@ -86,6 +67,15 @@ class WireGuardControlTest {
         wireguard.restore(prior)
         assertEquals("com.example.vpn", alwaysOn.app)
         assertTrue(alwaysOn.lockdown)
+    }
+
+    @Test fun when_another_app_holds_the_slot_it_is_taken_before_the_tunnel_starts() {
+        // Android refuses to start a second VPN while another app is always-on,
+        // so here the order is the reverse of the usual one.
+        val alwaysOn = FakeAlwaysOn(app = TOR_APP, lockdown = true, events = events)
+        val wireguard = control(alwaysOn, FakeTunnel(events = events))
+        assertTrue(wireguard.enforce())
+        assertEquals(listOf("always-on=$us lockdown=true", "tunnel up"), events)
     }
 
     @Test fun a_tunnel_that_will_not_start_never_gets_lockdown() {

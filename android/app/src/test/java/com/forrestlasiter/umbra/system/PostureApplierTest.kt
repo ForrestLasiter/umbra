@@ -76,6 +76,25 @@ class PostureApplierTest {
         assertEquals(listOf("snapshot:mac", "enforce:mac"), events)
     }
 
+    @Test fun wanted_controls_are_enforced_before_dropped_ones_are_restored() {
+        // Two controls can share one OS setting (the always-on VPN). The new
+        // holder must take over before the old one lets go.
+        val events = mutableListOf<String>()
+        val old = object : SystemControl {
+            override val capability = "mac"
+            override fun snapshot(): String? = "original"
+            override fun enforce(): Boolean = true
+            override fun restore(prior: String): Boolean { events += "restore:mac"; return true }
+            override fun isEnforced(): Boolean = false
+        }
+        val applier = PostureApplier(listOf(old, FakeControl("bluetooth_off", events = events)), MapStore())
+        applier.reconcile(setOf("mac"))
+        val outcomes = applier.reconcile(setOf("bluetooth_off"))
+        assertEquals(listOf("enforce:bluetooth_off", "restore:mac"), events)
+        // The report still lists controls in their usual order.
+        assertEquals(listOf("mac", "bluetooth_off"), outcomes.map { it.capability })
+    }
+
     @Test fun only_capabilities_the_platform_enforces_are_wanted() {
         // kernel is required by the profile but not ENFORCED here: not our job.
         assertEquals(setOf("mac"), PostureApplier.wantedFor(spec, "home", system))
