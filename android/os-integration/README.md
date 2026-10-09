@@ -195,6 +195,24 @@ A WireGuard config still has to be imported (in the app, or over `adb` with the
 `IMPORT_WIREGUARD` action; see `PostureCommandReceiver`). Until one is, the
 capability shows as unavailable with that reason.
 
+## Testing an OS build
+
+`tests/posture-matrix.sh` is the cross-check for all of the above. Against a
+device or emulator running an OS build (reachable over `adb`, with `adb root`),
+it applies every profile in turn with all controls active at once, switches
+between them in both directions, and checks the live system state after each:
+sysctls, properties, packet-filter rules, the always-on VPN setting, radios, the
+camera restriction, plus that the internet is reachable and names still resolve.
+Finally it applies `normal` and compares a full snapshot of that state with the
+one taken before anything was applied. They must be identical.
+
+```bash
+android/os-integration/tests/posture-matrix.sh                 # system controls only
+android/os-integration/tests/posture-matrix.sh wg-client.conf  # with a WireGuard tunnel
+```
+
+It also fails on any SELinux denial that mentions Umbra and on any crash.
+
 ## Files
 
 | File | Purpose |
