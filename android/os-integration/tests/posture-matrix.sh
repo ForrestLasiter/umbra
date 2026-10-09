@@ -156,6 +156,13 @@ adb root > /dev/null 2>&1; sleep 3; adb wait-for-device
 [ "$(g id -u)" = "0" ] && ROOT=1
 echo "== device: $(g getprop ro.build.fingerprint)"
 echo "   build type $(g getprop ro.build.type), SELinux $(g getenforce), adb root: $([ "$ROOT" = 1 ] && echo yes || echo "no (root-only checks will be skipped)")"
+# An OS image that ships the Tor app has Umbra install it on first boot; give
+# that a moment to finish on a freshly wiped device.
+if [ -n "$(g "ls /product/etc/umbra/tor-provider.apk /system_ext/etc/umbra/tor-provider.apk 2>/dev/null")" ]; then
+    for _ in $(seq 1 60); do [ -n "$(g pm list packages $TOR_APP)" ] && break; sleep 2; done
+    [ -n "$(g pm list packages $TOR_APP)" ] && ok "the Tor app this OS ships was installed on first boot" ||
+        bad "this OS ships the Tor app but it was not installed"
+fi
 [ -n "$(g pm list packages $TOR_APP)" ] && TOR=1
 echo "   Tor app in this build: $([ "$TOR" = 1 ] && echo yes || echo "no (paranoid runs without Tor)")"
 g svc bluetooth enable > /dev/null; sleep 6      # so bluetooth_off has something to turn off
