@@ -9,6 +9,10 @@ internal class FakeAlwaysOn(
     var refuseSet: Boolean = false,
 ) : AlwaysOnVpn {
     var authorized: String? = null
+
+    /** The app whose VPN is established. Tests set it; nothing here starts a VPN. */
+    var active: String? = null
+    override fun activeApp(): String? = active
     override fun authorize(packageName: String): Boolean { authorized = packageName; return true }
     override fun current(): Pair<String?, Boolean>? = if (readable) app to lockdown else null
     override fun set(packageName: String?, lockdown: Boolean): Boolean {

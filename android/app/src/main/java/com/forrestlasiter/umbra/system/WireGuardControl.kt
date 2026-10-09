@@ -39,6 +39,9 @@ interface AlwaysOnVpn {
 
     /** Set (or with null, clear) the always-on app and its lockdown flag. */
     fun set(packageName: String?, lockdown: Boolean): Boolean
+
+    /** The app whose VPN is established right now, or null if none (or unreadable). */
+    fun activeApp(): String?
 }
 
 /** The tunnel itself. An interface so the control is testable. */
@@ -77,6 +80,19 @@ class SystemAlwaysOnVpn(context: Context) : AlwaysOnVpn {
         arrayOf(Int::class.javaPrimitiveType!!, String::class.java, Boolean::class.javaPrimitiveType!!, List::class.java),
         userId, packageName, lockdown, null,
     ) == true
+
+    // VpnConfig.user is the package that established the VPN. The network's own
+    // owner is hidden from every app but that one, so this is the only way to
+    // tell WHOSE VPN is up.
+    override fun activeApp(): String? {
+        val config = call("getVpnConfig", arrayOf(Int::class.javaPrimitiveType!!), userId)
+        if (config == null || config === FAILED) return null
+        return try {
+            config.javaClass.getField("user").get(config) as? String
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     /** Invoke a hidden VpnManager method. Returns [FAILED] if it is missing or refused. */
     private fun call(name: String, types: Array<Class<*>>, vararg args: Any?): Any? {
@@ -146,6 +162,7 @@ class WireGuardControl(
         }
         // Tunnel first, lockdown second: bringing the tunnel up needs no network
         // by itself, and this order never leaves lockdown pointing at nothing.
+        if (!slot.authorize(packageName)) return false      // or the tunnel asks for consent
         if (!tunnel.isUp && !bringUp(text)) return false
         if (!slot.pin(packageName)) return false
         return isEnforced() == true

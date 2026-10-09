@@ -1,8 +1,6 @@
 package com.forrestlasiter.umbra.system
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import com.forrestlasiter.umbra.tor.OrbotHelper
 
 /*
@@ -28,9 +26,6 @@ import com.forrestlasiter.umbra.tor.OrbotHelper
 interface TorProvider {
     val packageName: String
     val installed: Boolean
-
-    /** Is this app's VPN up right now? */
-    val vpnUp: Boolean
 }
 
 /** Orbot, as seen through PackageManager and ConnectivityManager. */
@@ -39,21 +34,6 @@ class OrbotProvider(private val context: Context) : TorProvider {
     override val packageName = OrbotHelper.ORBOT_PACKAGE
 
     override val installed: Boolean get() = OrbotHelper.isInstalled(context)
-
-    override val vpnUp: Boolean
-        get() {
-            val connectivity = context.getSystemService(ConnectivityManager::class.java) ?: return false
-            val uid = try {
-                context.packageManager.getApplicationInfo(packageName, 0).uid
-            } catch (e: Exception) {
-                return false
-            }
-            @Suppress("DEPRECATION")    // allNetworks: the callback API cannot answer "right now"
-            return connectivity.allNetworks.any { network ->
-                val caps = connectivity.getNetworkCapabilities(network)
-                caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) && caps.ownerUid == uid
-            }
-        }
 }
 
 class TorControl(
@@ -83,16 +63,22 @@ class TorControl(
     }
 
     override fun enforce(): Boolean {
-        // Already holding (a re-assert): leave it be. Pinning again would make
-        // Android restart the Tor app's VPN and drop every open connection.
-        if (isEnforced() == true) return true
+        if (slot.pinnedTo(provider.packageName) == true) {
+            // A re-assert (after a reboot, say). Android is already starting or
+            // running the Tor app's VPN; pinning again would restart it and drop
+            // every open connection. Give it time, and only if it stays down
+            // pin again to make Android start it afresh.
+            if (await { vpnUp }) return true
+            slot.pin(provider.packageName)
+            return isEnforced() == true
+        }
         if (!slot.claim()) return false
         // Pinning is the whole action: Android starts the Tor app's VPN itself,
         // and from this call on nothing leaves outside it.
         if (!slot.pin(provider.packageName)) return false
         // Tor needs a while to connect. Wait, so that "enforced" is only ever
         // reported for a VPN that is really up.
-        await { provider.vpnUp }
+        await { vpnUp }
         return isEnforced() == true
     }
 
@@ -100,14 +86,17 @@ class TorControl(
 
     override fun isEnforced(): Boolean? {
         val pinned = slot.pinnedTo(provider.packageName) ?: return null
-        return pinned && provider.vpnUp
+        return pinned && vpnUp
     }
+
+    /** Is the Tor app's own VPN established right now? */
+    private val vpnUp: Boolean get() = slot.activeVpnApp() == provider.packageName
 
     override fun diagnostic(): String {
         val setting = slot.current()
-        val hint = if (slot.pinnedTo(provider.packageName) == true && !provider.vpnUp)
+        val hint = if (slot.pinnedTo(provider.packageName) == true && !vpnUp)
             "; Tor has not connected yet, so traffic is blocked until it does" else ""
-        return "tor vpn up=${provider.vpnUp}, always-on app=${setting?.first}, lockdown=${setting?.second}$hint"
+        return "tor vpn up=$vpnUp, always-on app=${setting?.first}, lockdown=${setting?.second}$hint"
     }
 
     private companion object {

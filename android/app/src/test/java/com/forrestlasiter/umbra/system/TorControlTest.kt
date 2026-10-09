@@ -14,10 +14,7 @@ import org.junit.Test
  */
 class TorControlTest {
 
-    private class FakeTor(
-        override var installed: Boolean = true,
-        override var vpnUp: Boolean = false,
-    ) : TorProvider {
+    private class FakeTor(override var installed: Boolean = true) : TorProvider {
         override val packageName = TOR_APP
     }
 
@@ -35,7 +32,7 @@ class TorControlTest {
 
     /** A Tor control whose wait ends at once, with Tor connected or not. */
     private fun tor(connects: Boolean = true) =
-        TorControl(slot, orbot, await = { condition -> if (connects) orbot.vpnUp = true; condition() })
+        TorControl(slot, orbot, await = { condition -> if (connects) alwaysOn.active = TOR_APP; condition() })
 
     private fun wireguard() = WireGuardControl(UMBRA_APP, slot, FakeTunnel(), { "[Interface]" })
 
@@ -58,8 +55,14 @@ class TorControlTest {
     @Test fun lockdown_alone_is_not_reported_as_enforced() {
         val control = tor()
         control.enforce()
-        orbot.vpnUp = false                             // Orbot stopped or crashed
+        alwaysOn.active = null                          // Orbot stopped or crashed
         assertEquals(false, control.isEnforced())
+    }
+
+    @Test fun another_apps_vpn_being_up_does_not_count() {
+        val control = tor(connects = false)
+        alwaysOn.active = UMBRA_APP                     // e.g. the WireGuard tunnel, mid hand-over
+        assertFalse(control.enforce())
     }
 
     @Test fun re_asserting_a_posture_that_holds_does_not_restart_tor() {
@@ -70,12 +73,18 @@ class TorControlTest {
         assertTrue(alwaysOn.events.isEmpty())
     }
 
-    @Test fun re_asserting_after_tor_stopped_pins_it_again_so_android_restarts_it() {
-        val control = tor()
-        control.enforce()
-        orbot.vpnUp = false
+    @Test fun re_asserting_while_tor_is_still_starting_waits_instead_of_restarting_it() {
+        tor(connects = false).enforce()                 // pinned, not connected yet
         alwaysOn.events.clear()
-        assertTrue(control.enforce())
+        assertTrue(tor(connects = true).enforce())      // it connects during the wait
+        assertTrue(alwaysOn.events.isEmpty())
+    }
+
+    @Test fun re_asserting_when_tor_stays_down_pins_it_again_so_android_restarts_it() {
+        tor().enforce()
+        alwaysOn.active = null
+        alwaysOn.events.clear()
+        assertFalse(tor(connects = false).enforce())    // still down: not "enforced"
         assertEquals(listOf("always-on=$TOR_APP lockdown=true"), alwaysOn.events)
     }
 

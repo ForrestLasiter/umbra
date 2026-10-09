@@ -96,8 +96,14 @@ object SystemPosture {
      * settings survived, the tunnel did not, so run the active profile again.
      */
     fun reassertInBackground(context: Context) {
-        val profile = activeProfile(context)
-        if (profile != PostureApplier.NORMAL) applyInBackground(context, profile)
+        val app = context.applicationContext
+        // Read the profile ON the posture thread: if a switch is in progress it
+        // finishes first, and this re-asserts the new profile, not the old one.
+        inBackground {
+            val profile = activeProfile(app)
+            if (profile == PostureApplier.NORMAL) return@inBackground
+            try { apply(app, profile) } catch (e: Exception) { Log.e(TAG, "re-asserting failed", e) }
+        }
     }
 
     /**

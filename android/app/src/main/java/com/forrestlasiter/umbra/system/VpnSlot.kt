@@ -47,6 +47,12 @@ class VpnSlot(
         return true
     }
 
+    /** Let [packageName] start a VPN with no consent dialog. Changes nothing else. */
+    fun authorize(packageName: String): Boolean = alwaysOn.authorize(packageName)
+
+    /** The app whose VPN is established right now, or null. */
+    fun activeVpnApp(): String? = alwaysOn.activeApp()
+
     /** Make [packageName] the always-on VPN with lockdown, with no consent dialog. */
     fun pin(packageName: String): Boolean =
         alwaysOn.authorize(packageName) && alwaysOn.set(packageName, lockdown = true)
