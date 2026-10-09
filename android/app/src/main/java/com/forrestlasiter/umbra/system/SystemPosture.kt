@@ -135,19 +135,35 @@ object SystemPosture {
         return outcomes
     }
 
-    /** A one-line, user-facing summary of an apply, honest about failures. */
-    fun summarize(profile: String, outcomes: List<Outcome>): String {
-        val failed = outcomes.filter { !it.ok }.map { it.capability }
-        val enforced = outcomes.count { it.ok && (it.change == Change.ENFORCED || it.change == Change.KEPT) }
-        // Say WHY each one is missing: "no WireGuard config imported" is something
-        // the user can fix, "this OS build lacks it" is not.
-        val missing = outcomes.filter { it.change == Change.UNAVAILABLE }
-            .map { if (it.note != null) "${it.capability} (${it.note})" else it.capability }
-        val note = if (missing.isEmpty()) "" else " Not enforced: ${missing.joinToString("; ")}."
-        return when {
-            failed.isNotEmpty() -> "$profile: could not change ${failed.joinToString()}.$note"
-            profile == PostureApplier.NORMAL -> "Back to normal: system settings restored."
-            else -> "$profile: $enforced system control(s) enforced.$note"
+    /**
+     * Measure the posture the phone is in, without changing anything: for each
+     * capability the active profile enforces here, ask its control whether it is
+     * actually in force at this moment. This is the phone's version of the Linux
+     * build's audit -- what was applied can drift (someone flips a setting, a
+     * tunnel drops), and the only honest status is a fresh measurement.
+     *
+     * Returns null when this is not a system build. Blocks; call off the main thread.
+     */
+    fun audit(context: Context): List<AuditItem>? {
+        val app = context.applicationContext
+        if (!SystemMode.isSystemBuild(app)) return null
+        val spec = SpecRepository(app).load()
+        val wanted = PostureApplier.wantedFor(spec, activeProfile(app), SystemMode.platform(app))
+        return controls(app).filter { it.capability in wanted }.map { control ->
+            val reason = control.unavailableReason()
+            if (reason != null) AuditItem(control.capability, holding = null, note = reason)
+            else {
+                val holding = control.isEnforced()
+                AuditItem(control.capability, holding, if (holding == true) null else control.diagnostic())
+            }
         }
     }
+
+    // The wording of results lives in PostureReport (pure, unit-tested); these
+    // keep the call sites short.
+    fun summarize(profile: String, outcomes: List<Outcome>): String =
+        PostureReport.summarize(profile, outcomes)
+
+    fun summarizeAudit(profile: String, items: List<AuditItem>): String =
+        PostureReport.summarizeAudit(profile, items)
 }

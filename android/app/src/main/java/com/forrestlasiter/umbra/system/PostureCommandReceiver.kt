@@ -16,6 +16,9 @@ import com.forrestlasiter.umbra.wg.WgConfigStore
  *   adb shell am broadcast -n com.forrestlasiter.umbra/.system.PostureCommandReceiver \
  *       -a com.forrestlasiter.umbra.action.IMPORT_WIREGUARD --es config "$(cat vpn.conf)"
  *
+ *   adb shell am broadcast -n com.forrestlasiter.umbra/.system.PostureCommandReceiver \
+ *       -a com.forrestlasiter.umbra.action.AUDIT
+ *
  * It is exported, so the manifest guards it with android.permission.DUMP -- a
  * permission held by the shell and the system but not by ordinary apps. Another
  * app on the phone therefore cannot use it to change (or drop) the posture, or
@@ -27,6 +30,24 @@ class PostureCommandReceiver : BroadcastReceiver() {
         when (intent.action) {
             ACTION_APPLY -> applyPosture(context, intent)
             ACTION_IMPORT_WIREGUARD -> report(importWireGuard(context, intent))
+            ACTION_AUDIT -> audit(context)
+        }
+    }
+
+    /** Measure the current posture without changing it, and say what is holding. */
+    private fun audit(context: Context) {
+        val ordered = isOrderedBroadcast
+        val pending = goAsync()
+        val app = context.applicationContext
+        SystemPosture.inBackground {
+            val profile = SystemPosture.activeProfile(app)
+            val items = try { SystemPosture.audit(app) } catch (e: Exception) { null }
+            val summary = if (items == null) "not audited: not a system build"
+                          else SystemPosture.summarizeAudit(profile, items)
+            Log.i(TAG, summary)
+            items?.filter { it.holding != true }?.forEach { Log.w(TAG, "  ${it.capability}: ${it.note}") }
+            if (ordered) pending.resultData = summary
+            pending.finish()
         }
     }
 
@@ -72,6 +93,7 @@ class PostureCommandReceiver : BroadcastReceiver() {
         private const val TAG = "UmbraPosture"
         const val ACTION_APPLY = "com.forrestlasiter.umbra.action.APPLY_POSTURE"
         const val ACTION_IMPORT_WIREGUARD = "com.forrestlasiter.umbra.action.IMPORT_WIREGUARD"
+        const val ACTION_AUDIT = "com.forrestlasiter.umbra.action.AUDIT"
         const val EXTRA_PROFILE = "profile"
         const val EXTRA_CONFIG = "config"
     }

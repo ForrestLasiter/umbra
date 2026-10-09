@@ -36,6 +36,24 @@ apply() {
     sleep 4
 }
 
+# Ask Umbra to MEASURE the posture it is in. Every control it enforces must
+# report as holding; "DRIFTED" or a short count is a failure.
+audit() {
+    local out
+    out=$(g "$R -a $U.action.AUDIT" | sed -n 's/.*data="\(.*\)"/\1/p')
+    echo "  audit: $out"
+    case "$out" in
+        *DRIFTED*) bad "audit reports drift" ;;
+        *" of "*)
+            local have total
+            have=$(echo "$out" | sed -n 's/^[a-z]*: \([0-9]*\) of \([0-9]*\) .*/\1/p')
+            total=$(echo "$out" | sed -n 's/^[a-z]*: \([0-9]*\) of \([0-9]*\) .*/\2/p')
+            [ -n "$have" ] && [ "$have" = "$total" ] && ok "audit: all $total controls verified" || bad "audit: $have of $total verified"
+            ;;
+        *) bad "audit gave no result" ;;
+    esac
+}
+
 # One line per piece of system state a control can change.
 snapshot() {
     echo "perf_event_paranoid=$(g cat /proc/sys/kernel/perf_event_paranoid)"
@@ -104,7 +122,32 @@ for profile in home travel paranoid travel home paranoid; do
     echo "== apply $profile"
     apply "$profile"
     expect "$profile"
+    audit
 done
+
+# Drift: change a setting behind Umbra's back. The audit must notice, and
+# re-applying the same profile must put it right.
+echo "== drift detection (under paranoid)"
+g settings put global non_persistent_mac_randomization_force_enabled 0
+out=$(g "$R -a $U.action.AUDIT" | sed -n 's/.*data="\(.*\)"/\1/p')
+echo "  audit: $out"
+case "$out" in *"DRIFTED: mac"*) ok "audit noticed the changed setting" ;; *) bad "audit did not notice drift" ;; esac
+apply paranoid
+audit
+
+# Reboot with a posture active: it must come back by itself and audit clean.
+echo "== reboot (under home)"
+apply home
+timeout 20 adb reboot; sleep 10
+adb wait-for-device
+for i in $(seq 1 300); do
+    [ "$(timeout 5 adb shell getprop sys.boot_completed 2>/dev/null | tr -d '[:cntrl:]')" = "1" ] && break
+    sleep 1
+done
+sleep 30
+adb root > /dev/null 2>&1; sleep 3; adb wait-for-device
+expect home
+audit
 
 echo "== apply normal"
 apply normal

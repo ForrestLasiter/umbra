@@ -12,6 +12,8 @@
          a blocklisted domain to prove the telemetry sinkhole is working. Without
          this, every one of those fails with a permission error. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- OS build: re-assert the active posture after a reboot (see BootReceiver). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Read-only posture checks (advisory capabilities) -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
@@ -75,6 +77,19 @@
             android:permission="android.permission.DUMP">
             <intent-filter>
                 <action android:name="com.forrestlasiter.umbra.action.APPLY_POSTURE" />
+                <action android:name="com.forrestlasiter.umbra.action.IMPORT_WIREGUARD" />
+                <action android:name="com.forrestlasiter.umbra.action.AUDIT" />
+            </intent-filter>
+        </receiver>
+
+        <!-- OS build: once the phone has restarted, run the active profile again so
+             nothing a posture promised depends on having survived the reboot. Only
+             the system can send BOOT_COMPLETED. -->
+        <receiver
+            android:name=".system.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 
