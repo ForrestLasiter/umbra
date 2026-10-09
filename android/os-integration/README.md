@@ -186,6 +186,11 @@ the previous always-on setting, if there was one, is put back.
 After a reboot Android starts the always-on VPN by itself; the app answers by
 re-asserting the posture the phone is in, which brings the tunnel back.
 
+`umbra-sysconfig.xml`, installed with the app, exempts it from Android's
+background restrictions. Without that, Android refuses to start the tunnel's VPN
+service whenever a posture is applied while the app is in the background, which
+is the normal case (the tile, or a re-assert after reboot).
+
 A WireGuard config still has to be imported (in the app, or over `adb` with the
 `IMPORT_WIREGUARD` action; see `PostureCommandReceiver`). Until one is, the
 capability shows as unavailable with that reason.
@@ -197,4 +202,8 @@ capability shows as unavailable with that reason.
 | `umbra-net.sh` | The service: reads the requests, writes the rules, reports the result |
 | `umbra-net.rc` | Defines the service (vendor side) |
 | `umbra-net-triggers.rc` | When init starts it: on `netd` start and whenever a request changes (system side, because vendor `.rc` files may not trigger on these properties) |
+| `umbra-kernel.rc` | The init actions behind the `kernel` capability |
+| `umbra-sysconfig.xml` | Exempts the app from background restrictions |
+| `telemetry.hosts` | The generated blocklist hosts file |
+| `patches/` | Patches to other projects (the DNS resolver) |
 | `sepolicy/` | The SELinux policy, in the three directories described above |

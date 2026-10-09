@@ -139,8 +139,11 @@ object SystemPosture {
     fun summarize(profile: String, outcomes: List<Outcome>): String {
         val failed = outcomes.filter { !it.ok }.map { it.capability }
         val enforced = outcomes.count { it.ok && (it.change == Change.ENFORCED || it.change == Change.KEPT) }
-        val missing = outcomes.filter { it.change == Change.UNAVAILABLE }.map { it.capability }
-        val note = if (missing.isEmpty()) "" else " Not available on this OS: ${missing.joinToString()}."
+        // Say WHY each one is missing: "no WireGuard config imported" is something
+        // the user can fix, "this OS build lacks it" is not.
+        val missing = outcomes.filter { it.change == Change.UNAVAILABLE }
+            .map { if (it.note != null) "${it.capability} (${it.note})" else it.capability }
+        val note = if (missing.isEmpty()) "" else " Not enforced: ${missing.joinToString("; ")}."
         return when {
             failed.isNotEmpty() -> "$profile: could not change ${failed.joinToString()}.$note"
             profile == PostureApplier.NORMAL -> "Back to normal: system settings restored."

@@ -59,6 +59,16 @@ prebuilt_etc {
     system_ext_specific: true,
 }
 
+// Exempts the app from Android's background restrictions, which would otherwise
+// refuse to start the tunnel's VPN service when a posture is applied from the
+// tile or re-asserted after a reboot. See the comment in the file.
+prebuilt_etc {
+    name: "umbra-sysconfig.xml",
+    src: "os-integration/umbra-sysconfig.xml",
+    sub_dir: "sysconfig",
+    system_ext_specific: true,
+}
+
 // Every source file both ways of building share: all of the app except the one
 // file that talks to the WireGuard library (see the comment on `srcs` below).
 filegroup {
@@ -73,6 +83,7 @@ android_app {
         "umbra-kernel.rc",
         "umbra-net",
         "umbra-net-triggers.rc",
+        "umbra-sysconfig.xml",
         "umbra-telemetry-hosts",
     ],
     manifest: ":UmbraPlatformManifest",

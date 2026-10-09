@@ -12,7 +12,8 @@ enum class Change {
     UNAVAILABLE, // wanted, but this OS build lacks what the control needs
 }
 
-data class Outcome(val capability: String, val change: Change, val ok: Boolean)
+/** [note] says why, when there is something the user should know (e.g. why unavailable). */
+data class Outcome(val capability: String, val change: Change, val ok: Boolean, val note: String? = null)
 
 /**
  * Reconciles the system controls to a set of wanted capabilities, and unwinds
@@ -40,7 +41,7 @@ class PostureApplier(
             // a snapshot from before, fall through and keep/restore as usual --
             // an unavailable control must never strand a setting we changed.)
             cap in wanted && prior == null && !control.available() ->
-                Outcome(cap, Change.UNAVAILABLE, ok = true)
+                Outcome(cap, Change.UNAVAILABLE, ok = true, note = control.unavailableReason())
             cap in wanted && prior == null -> {
                 val now = control.snapshot()
                 if (now == null) {

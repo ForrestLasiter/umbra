@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+     Installed as /system_ext/etc/sysconfig/umbra-sysconfig.xml on an OS build.
+
+     Exempts Umbra from Android's background restrictions. Two things need it:
+
+     - A posture is often applied while the app is in the background (from the
+       Quick Settings tile, or re-asserted after a reboot). Bringing the
+       WireGuard tunnel up starts the tunnel library's VPN service, and Android
+       refuses to start a service for an app that is in the background unless
+       the app is exempt.
+     - An always-on VPN must not be put to sleep by battery optimisation.
+-->
+<config>
+    <allow-in-power-save package="com.forrestlasiter.umbra" />
+</config>
