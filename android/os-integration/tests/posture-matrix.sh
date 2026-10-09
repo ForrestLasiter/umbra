@@ -171,6 +171,21 @@ adb root > /dev/null 2>&1; sleep 3; adb wait-for-device
 expect home
 audit
 
+# Two changes requested at the same moment (the tile and a script, say). They are
+# meant to run one after the other on a single thread, never interleaved, so the
+# phone must end up cleanly in ONE of the two profiles and audit clean for it.
+echo "== two changes at once (travel and paranoid)"
+g "$R -a $U.action.APPLY_POSTURE --es profile travel" > /dev/null &
+g "$R -a $U.action.APPLY_POSTURE --es profile paranoid" > /dev/null &
+wait
+sleep 6
+both=$(g "$R -a $U.action.AUDIT" | sed -n 's/.*data="\(.*\)"/\1/p')
+case "$both" in
+    travel:*|paranoid:*) ok "ended in one profile: ${both%%:*}" ;;
+    *) bad "ended in neither profile: $both" ;;
+esac
+audit
+
 echo "== apply normal"
 apply normal
 after=$(snapshot)
