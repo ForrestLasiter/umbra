@@ -42,22 +42,24 @@ object PostureEngine {
 
     /**
      * @param unavailable capabilities the matrix says this platform enforces but
-     *   that THIS device cannot (an OS build missing the helper a control needs).
-     *   They are planned as UNAVAILABLE so the UI never shows them as on.
+     *   that THIS device cannot right now, each with the reason to show (an OS
+     *   build missing a helper, a WireGuard config not imported yet). They are
+     *   planned as UNAVAILABLE so the UI never shows them as on.
      */
     fun plan(
         spec: CoreSpec,
         profileName: String,
         platform: String = CoreSpec.PLATFORM_ANDROID,
-        unavailable: Set<String> = emptySet(),
+        unavailable: Map<String, String> = emptyMap(),
     ): PosturePlan {
         val profile = spec.profiles[profileName]
             ?: return PosturePlan(profileName, emptyList())
         val items = profile.requires.map { cap ->
             val declared = spec.support(cap, platform)
-            val support = if (cap in unavailable) PlatformCapability(
+            val whyNot = unavailable[cap]
+            val support = if (whyNot != null) PlatformCapability(
                 level = Enforcement.UNAVAILABLE.wire,
-                reason = "this OS build does not include what Umbra needs to enforce it",
+                reason = whyNot,
             ) else declared
             val level = support.enforcement
             PostureItem(

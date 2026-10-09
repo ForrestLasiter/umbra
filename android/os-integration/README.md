@@ -145,6 +145,51 @@ depends on it being off.
 The file needs no extra SELinux policy beyond the property labels in
 `sepolicy/private/`, which it shares with the packet-filter service.
 
+## WireGuard
+
+The ordinary app tunnels with the WireGuard project's Android library, which
+Gradle fetches from Maven. An OS source tree does not contain it, so by default
+the OS build compiles a stand-in that reports "no tunnel in this OS build".
+
+To get a real tunnel, the OS provides the library and says so:
+
+1. Define a module named `umbra-wireguard-tunnel` that imports the published
+   `com.wireguard.android:tunnel` archive, for example:
+
+   ```
+   android_library_import {
+       name: "umbra-wireguard-tunnel",
+       aars: ["tunnel-1.0.20230706.aar"],
+       sdk_version: "current",
+       min_sdk_version: "21",
+       extract_jni: true,
+       static_libs: ["androidx.annotation_annotation", "androidx.collection_collection"],
+   }
+   ```
+
+   Use the version `build.gradle.kts` pins, so both builds run the same tunnel.
+
+2. Set the Soong variable in the product configuration:
+
+   ```make
+   $(call soong_config_set,umbra,wireguard_tunnel,true)
+   ```
+
+With that, the `wireguard` capability does three things an ordinary app cannot:
+it authorizes itself as the VPN app with no consent dialog, brings the tunnel
+up, and pins itself as Android's always-on VPN with lockdown. Lockdown is the
+killswitch, and it is Android's own: the OS drops anything that would leave
+outside the VPN, including while the tunnel is down or reconnecting and after a
+reboot before it is back. On leaving the posture, lockdown is lifted first and
+the previous always-on setting, if there was one, is put back.
+
+After a reboot Android starts the always-on VPN by itself; the app answers by
+re-asserting the posture the phone is in, which brings the tunnel back.
+
+A WireGuard config still has to be imported (in the app, or over `adb` with the
+`IMPORT_WIREGUARD` action; see `PostureCommandReceiver`). Until one is, the
+capability shows as unavailable with that reason.
+
 ## Files
 
 | File | Purpose |

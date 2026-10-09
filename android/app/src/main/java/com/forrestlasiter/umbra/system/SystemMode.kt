@@ -31,6 +31,8 @@ object SystemMode {
         "android.permission.NETWORK_SETTINGS",       // DHCP hostname restriction
         "android.permission.BLUETOOTH_PRIVILEGED",   // turn the radio off without a prompt
         "android.permission.MANAGE_USERS",           // the "no camera" user restriction
+        "android.permission.CONTROL_VPN",            // start the tunnel without a consent dialog
+        "android.permission.CONTROL_ALWAYS_ON_VPN",  // always-on VPN with lockdown
     )
 
     /** Pure decision, kept separate from Android so it is unit-testable. */

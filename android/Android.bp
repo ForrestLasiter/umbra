@@ -112,6 +112,11 @@ android_app {
     }),
     kotlin_plugins: ["kotlin-serialize-compiler-plugin"],
 
+    // The WireGuard library brings its native tunnel inside its archive. The
+    // build only packages such prebuilt native libraries when they are embedded
+    // in the APK, so ask for that. (No effect on the stand-in build.)
+    use_embedded_native_libs: true,
+
     // Public SDK only -- the same limit the Gradle build has. System-only calls
     // go through reflection (see system/Controls.kt), which is what lets one
     // source tree serve both builds.

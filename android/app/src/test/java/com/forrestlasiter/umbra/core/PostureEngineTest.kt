@@ -74,9 +74,10 @@ class PostureEngineTest {
 
     @Test fun a_capability_this_device_cannot_deliver_is_planned_unavailable() {
         // The matrix may promise more than one particular OS build can keep.
-        val plan = PostureEngine.plan(spec(), "travel", unavailable = setOf("telemetry"))
+        val plan = PostureEngine.plan(spec(), "travel", unavailable = mapOf("telemetry" to "no helper here"))
         val item = plan.items.first { it.capability == "telemetry" }
         assertEquals(PlannedAction.UNAVAILABLE, item.action)
+        assertEquals("no helper here", item.reason)        // the user sees WHY
         assertTrue(!item.honestlyOn)
         // Everything else is planned exactly as before.
         assertEquals(PlannedAction.GUIDE_TO_SETTING, plan.items.first { it.capability == "mac" }.action)

@@ -23,6 +23,13 @@ class WireGuardBackend(context: Context) {
     private val backend: Backend = GoBackend(context.applicationContext)
     private val tunnel = UmbraTunnel()
 
+    init {
+        // When Android starts our VPN service as the always-on VPN (after a
+        // reboot), the library tells us here. What to do about it is decided by
+        // whoever set Tunnels.onAlwaysOn (see UmbraApp).
+        GoBackend.setAlwaysOnCallback { com.forrestlasiter.umbra.vpn.Tunnels.onAlwaysOn?.invoke() }
+    }
+
     val isUp: Boolean get() = tunnel.state == Tunnel.State.UP
 
     /** Parse [configText] and bring the tunnel up. Throws on a bad config / failure. */

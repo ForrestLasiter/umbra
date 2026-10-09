@@ -48,8 +48,9 @@ class PostureTileService : TileService() {
         val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.tile_choose_posture)
             .setSingleChoiceItems(profiles.toTypedArray(), profiles.indexOf(active)) { d, which ->
-                SystemPosture.apply(this, profiles[which])
-                refresh()
+                // Off the main thread; the tile is redrawn when it has finished,
+                // so it shows the posture that was actually reached.
+                SystemPosture.applyInBackground(this, profiles[which]) { refresh() }
                 d.dismiss()
             }
             .setNegativeButton(android.R.string.cancel, null)

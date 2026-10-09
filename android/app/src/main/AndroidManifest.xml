@@ -28,10 +28,17 @@
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.MANAGE_USERS"
         tools:ignore="ProtectedPermissions" />
+    <!-- Start the WireGuard tunnel without the consent dialog, and pin it as the
+         always-on VPN with lockdown (Android's killswitch). -->
+    <uses-permission android:name="android.permission.CONTROL_VPN"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.CONTROL_ALWAYS_ON_VPN"
+        tools:ignore="ProtectedPermissions" />
     <!-- Runtime permission; an OS build pre-grants it. Needed to switch the radio. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
     <application
+        android:name=".UmbraApp"
         android:allowBackup="false"
         android:label="Umbra"
         android:supportsRtl="true"

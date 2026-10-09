@@ -4,7 +4,6 @@ import android.content.Context
 import com.forrestlasiter.umbra.core.PosturePlan
 import com.forrestlasiter.umbra.tor.OrbotHelper
 import com.forrestlasiter.umbra.wg.WgConfigStore
-import com.forrestlasiter.umbra.wg.WireGuardBackend
 
 /**
  * Picks the right enforcement datapath for a posture (see TunnelMode) and drives
@@ -19,7 +18,8 @@ import com.forrestlasiter.umbra.wg.WireGuardBackend
  */
 class TunnelController(private val context: Context) {
 
-    private val wg by lazy { WireGuardBackend(context) }
+    // The process-wide tunnel, shared with the OS-build WireGuard control.
+    private val wg by lazy { Tunnels.wireGuard(context) }
     private val store by lazy { WgConfigStore(context) }
 
     fun modeFor(plan: PosturePlan): TunnelMode = TunnelMode.forPlan(plan)

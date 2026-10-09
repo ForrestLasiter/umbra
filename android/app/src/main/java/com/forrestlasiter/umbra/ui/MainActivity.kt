@@ -70,18 +70,12 @@ class MainActivity : ComponentActivity() {
         }
 
         fun activate() {
-            val prepare: Intent? = VpnService.prepare(this)
+            // An OS build authorizes its own tunnel, so there is no dialog to show.
+            val prepare: Intent? = if (state.systemBuild) null else VpnService.prepare(this)
             if (prepare != null) consent.launch(prepare) else startEnforcement(state)
         }
 
-        fun deactivate() {
-            state.plan?.let { tunnels.deactivate(it) }
-            // System build: put back every setting the posture changed. A no-op
-            // (returns null) on a normal install.
-            val restored = SystemPosture.apply(this, PostureApplier.NORMAL)
-            vm.setActive(false)
-            if (restored != null) vm.setMessage(SystemPosture.summarize(PostureApplier.NORMAL, restored))
-        }
+        fun deactivate() = stopEnforcement(state)
 
         Column(
             Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
@@ -153,27 +147,48 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Everything here runs on the posture thread, not the main thread: system
+     * controls wait for the OS to confirm, and the WireGuard library deadlocks if
+     * the main thread is the one waiting for its service to start. The view
+     * model's setters are safe to call from any thread.
+     */
     private fun startEnforcement(state: PostureUiState) {
         val plan = state.plan ?: return
-        // System controls first (they need no consent and cannot half-start),
-        // then the tunnel. On a normal install `system` is null and only the
-        // tunnel runs, exactly as before.
-        val system = SystemPosture.apply(this, state.selected)
-        val systemNote = system?.let { SystemPosture.summarize(state.selected, it) }
-        // On an OS build a posture may need no tunnel at all (every capability is
-        // a system control). That is success, not "nothing to enforce".
-        if (system != null && tunnels.modeFor(plan) == TunnelMode.NONE) {
-            vm.setActive(true)
-            vm.setMessage(systemNote)
-            return
+        val profile = state.selected
+        vm.setMessage("Applying $profile…")
+        SystemPosture.inBackground {
+            // System controls first (they need no consent and cannot half-start),
+            // then the tunnel. On a normal install `system` is null and only the
+            // tunnel runs, exactly as before.
+            val system = SystemPosture.apply(this, profile)
+            val systemNote = system?.let { SystemPosture.summarize(profile, it) }
+            // On an OS build a posture may need no tunnel at all (every capability
+            // is a system control). That is success, not "nothing to enforce".
+            if (system != null && tunnels.modeFor(plan) == TunnelMode.NONE) {
+                vm.setActive(true)
+                vm.setMessage(systemNote)
+                return@inBackground
+            }
+            val error = tunnels.activate(profile, plan)
+            when {
+                error == null -> { vm.setActive(true); vm.setMessage(systemNote ?: "Enforcing $profile.") }
+                // The tunnel failed but system controls are holding: say both, and
+                // stay "active" so Deactivate is offered and restores them.
+                system != null -> { vm.setActive(true); vm.setMessage("$systemNote Tunnel: $error") }
+                else -> vm.setMessage(error)
+            }
         }
-        val error = tunnels.activate(state.selected, plan)
-        when {
-            error == null -> { vm.setActive(true); vm.setMessage(systemNote ?: "Enforcing ${state.selected}.") }
-            // The tunnel failed but system controls are holding: say both, and
-            // stay "active" so Deactivate is offered and restores them.
-            system != null -> { vm.setActive(true); vm.setMessage("$systemNote Tunnel: $error") }
-            else -> vm.setMessage(error)
+    }
+
+    private fun stopEnforcement(state: PostureUiState) {
+        SystemPosture.inBackground {
+            state.plan?.let { tunnels.deactivate(it) }
+            // System build: put back every setting the posture changed. A no-op
+            // (returns null) on a normal install.
+            val restored = SystemPosture.apply(this, PostureApplier.NORMAL)
+            vm.setActive(false)
+            if (restored != null) vm.setMessage(SystemPosture.summarize(PostureApplier.NORMAL, restored))
         }
     }
 

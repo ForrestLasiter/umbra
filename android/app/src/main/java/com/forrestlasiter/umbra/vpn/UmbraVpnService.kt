@@ -13,6 +13,8 @@ import com.forrestlasiter.umbra.core.PostureEngine
 import com.forrestlasiter.umbra.core.SpecRepository
 import com.forrestlasiter.umbra.net.dns.DnsSinkhole
 import com.forrestlasiter.umbra.net.dns.TelemetryBlocklist
+import com.forrestlasiter.umbra.system.SystemMode
+import com.forrestlasiter.umbra.system.SystemPosture
 import java.net.DatagramSocket
 import kotlin.concurrent.thread
 
@@ -39,6 +41,20 @@ class UmbraVpnService : VpnService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) { teardown(); return START_NOT_STICKY }
+        // On an OS build Umbra can be Android's always-on VPN. After a reboot (or
+        // if the process died) the OS starts "the VPN service" of the always-on
+        // app with this bare action and no profile. That is not a request for the
+        // DNS filter: it means "bring your tunnel back". Re-assert the posture the
+        // phone is in, which brings the WireGuard tunnel up again, and step aside.
+        if (intent?.action == SERVICE_INTERFACE && SystemMode.isSystemBuild(this)) {
+            // The OS started us as a foreground service, so it insists on a
+            // notification being shown before we are allowed to stop.
+            startForeground(NOTIF_ID, buildNotification(SystemPosture.activeProfile(this)))
+            SystemPosture.reassertInBackground(this)
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
         val profile = intent?.getStringExtra(EXTRA_PROFILE) ?: DEFAULT_PROFILE
         startForeground(NOTIF_ID, buildNotification(profile))
         if (tun == null) bringUp(profile)

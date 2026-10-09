@@ -245,8 +245,8 @@
           "reason": "sets the system 'no camera' user restriction, which blocks the camera for every app and survives a reboot"
         },
         "wireguard": {
-          "level": "requires_entitlement",
-          "reason": "native WireGuard over VPNService after a one-time VPN-consent grant"
+          "level": "enforced",
+          "reason": "brings the WireGuard tunnel up with no consent dialog and pins it as Android's always-on VPN with lockdown, so nothing leaves outside the tunnel"
         }
       }
     },

@@ -67,6 +67,7 @@ ordinary app can never get, and plans against a second row of the core matrix,
 | discovery | advisory | **enforced** - drops outbound mDNS/LLMNR/SSDP/NetBIOS/WSD packets |
 | telemetry | via the VPN slot | **enforced** - the OS resolver's hosts sinkhole; the VPN slot stays free |
 | kernel | needs root | **enforced** - init asserts the hardening sysctls; perf lockdown is read back as proof |
+| wireguard | after VPN consent | **enforced** - no consent dialog, and pinned as Android's always-on VPN with lockdown (if the OS provides the tunnel library) |
 | everything else | as above | unchanged until its system control is written |
 
 The matrix only lists a capability as enforced once its control exists, so this

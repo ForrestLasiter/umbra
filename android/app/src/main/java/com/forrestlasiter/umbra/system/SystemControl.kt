@@ -31,6 +31,14 @@ interface SystemControl {
      */
     fun available(): Boolean = true
 
+    /**
+     * Why the control is unavailable, in words the user can act on, or null when
+     * it is available. The default covers the usual case (the OS build lacks a
+     * helper); a control with a fixable cause, such as a missing config, says so.
+     */
+    fun unavailableReason(): String? =
+        if (available()) null else "this OS build does not include what Umbra needs to enforce it"
+
     /** What the control last observed, for the log when something fails. */
     fun diagnostic(): String? = null
 
