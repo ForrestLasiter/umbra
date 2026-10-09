@@ -69,15 +69,23 @@ android_app {
     ],
     manifest: ":UmbraPlatformManifest",
 
-    srcs: [
-        "app/src/main/java/**/*.kt",
-        "platform/src/**/*.kt",
-    ],
     // The Gradle build pulls the WireGuard userspace library from Maven. An OS
-    // tree has no such library, so the platform build swaps in
-    // platform/src/.../wg/WireGuardBackend.kt, which reports that honestly
-    // instead of tunnelling.
-    exclude_srcs: ["app/src/main/java/com/forrestlasiter/umbra/wg/WireGuardBackend.kt"],
+    // tree does not contain it, so there are two ways to build:
+    //
+    //   - by default, swap in platform/src/.../wg/WireGuardBackend.kt, a
+    //     stand-in that reports "no tunnel in this OS build" instead of tunnelling;
+    //   - if the OS provides the library as a module named
+    //     `umbra-wireguard-tunnel` and sets the Soong config variable
+    //     umbra.wireguard_tunnel to "true", build the real backend against it.
+    //     See os-integration/README.md.
+    srcs: ["app/src/main/java/**/*.kt"] + select(soong_config_variable("umbra", "wireguard_tunnel"), {
+        "true": [],
+        default: ["platform/src/**/*.kt"],
+    }),
+    exclude_srcs: select(soong_config_variable("umbra", "wireguard_tunnel"), {
+        "true": [],
+        default: ["app/src/main/java/com/forrestlasiter/umbra/wg/WireGuardBackend.kt"],
+    }),
 
     resource_dirs: ["app/src/main/res"],
     asset_dirs: ["app/src/main/assets"],
@@ -94,7 +102,10 @@ android_app {
         "androidx.lifecycle_lifecycle-viewmodel-compose",
         "kotlinx-coroutines-android",
         "kotlinx_serialization_json",
-    ],
+    ] + select(soong_config_variable("umbra", "wireguard_tunnel"), {
+        "true": ["umbra-wireguard-tunnel"],
+        default: [],
+    }),
     kotlin_plugins: ["kotlin-serialize-compiler-plugin"],
 
     // Public SDK only -- the same limit the Gradle build has. System-only calls
