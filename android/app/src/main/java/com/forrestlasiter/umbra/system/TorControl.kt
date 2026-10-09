@@ -70,7 +70,7 @@ class TorControl(
     override fun available(): Boolean = unavailableReason() == null
 
     override fun unavailableReason(): String? = when {
-        !provider.installed -> "this OS build does not include Orbot, the app that provides Tor"
+        !provider.installed -> "Orbot, the app that provides Tor, is not installed"
         slot.current() == null -> "this OS build does not let Umbra manage the always-on VPN"
         else -> null
     }

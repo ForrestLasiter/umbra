@@ -36,6 +36,10 @@
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.CONTROL_ALWAYS_ON_VPN"
         tools:ignore="ProtectedPermissions" />
+    <!-- Install the Orbot an OS image ships, once, with no prompt (see
+         tor/BundledOrbot). -->
+    <uses-permission android:name="android.permission.INSTALL_PACKAGES"
+        tools:ignore="ProtectedPermissions" />
     <!-- Runtime permission; an OS build pre-grants it. Needed to switch the radio. -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
@@ -87,6 +91,11 @@
                 <action android:name="com.forrestlasiter.umbra.action.AUDIT" />
             </intent-filter>
         </receiver>
+
+        <!-- The system's answer to the one-time Orbot install. -->
+        <receiver
+            android:name=".tor.BundledOrbot$ResultReceiver"
+            android:exported="false" />
 
         <!-- OS build: once the phone has restarted, run the active profile again so
              nothing a posture promised depends on having survived the reboot. Only

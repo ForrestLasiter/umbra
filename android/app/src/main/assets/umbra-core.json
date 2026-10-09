@@ -238,7 +238,7 @@
         },
         "tor": {
           "level": "enforced",
-          "reason": "pins Orbot (the Tor Project's app) as Android's always-on VPN with lockdown and no consent dialog, so traffic leaves through Tor or not at all; needs Orbot in the OS image"
+          "reason": "pins Orbot (the Tor Project's app) as Android's always-on VPN with lockdown and no consent dialog, so traffic leaves through Tor or not at all; needs Orbot installed, which an OS image can ship for Umbra to install on first boot"
         },
         "webcam_off": {
           "level": "enforced",
