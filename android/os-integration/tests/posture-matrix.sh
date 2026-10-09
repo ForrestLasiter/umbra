@@ -26,7 +26,20 @@ fails=0
 g() { timeout 90 adb shell "$@" < /dev/null 2>&1 | tr -d '\015'; }
 ok()   { echo "  ok    $1"; }
 bad()  { echo "  FAIL  $1"; fails=$((fails + 1)); }
-check() { if [ "$2" = "$3" ]; then ok "$1 = $2"; else bad "$1: got [$2], expected [$3]"; fi; }
+skip() { echo "  skip  $1 (needs adb root)"; skipped=$((skipped + 1)); }
+check() {
+    if [ "$2" = "n/a" ]; then skip "$1"
+    elif [ "$2" = "$3" ]; then ok "$1 = $2"
+    else bad "$1: got [$2], expected [$3]"; fi
+}
+# Some state can only be read as root (umbra's own properties, the packet filter,
+# init-only sysctls, the kernel log). Without root those read as "n/a" and their
+# checks are skipped; Umbra's own audit and the functional checks still run.
+ROOT=0
+skipped=0
+r() { if [ "$ROOT" = 1 ]; then g "$@"; else echo "n/a"; fi; }
+# A name from Umbra's telemetry blocklist, to prove the sinkhole by resolving it.
+CANARY=analytics.google.com
 
 apply() {
     local out
@@ -57,11 +70,11 @@ audit() {
 # One line per piece of system state a control can change.
 snapshot() {
     echo "perf_event_paranoid=$(g cat /proc/sys/kernel/perf_event_paranoid)"
-    echo "kptr_restrict=$(g cat /proc/sys/kernel/kptr_restrict)"
-    echo "telemetry_switch=$(g getprop persist.umbra.net.telemetry_sinkhole | sed 's/^$/0/')"
-    echo "packet_filter=$(g getprop umbra.net.applied)"
-    echo "inbound_rules=$(g "iptables -w -S oem_umbra_in 2>/dev/null | grep -c -- '-A '")"
-    echo "discovery_rules=$(g "iptables -w -S oem_umbra_out 2>/dev/null | grep -c -- '-A '")"
+    echo "kptr_restrict=$(r cat /proc/sys/kernel/kptr_restrict)"
+    echo "telemetry_switch=$(r getprop persist.umbra.net.telemetry_sinkhole | sed 's/^$/0/')"
+    echo "packet_filter=$(r getprop umbra.net.applied)"
+    echo "inbound_rules=$(r "iptables -w -S oem_umbra_in 2>/dev/null | grep -c -- '-A '")"
+    echo "discovery_rules=$(r "iptables -w -S oem_umbra_out 2>/dev/null | grep -c -- '-A '")"
     echo "always_on_vpn=$(g settings get secure always_on_vpn_app)"
     echo "vpn_lockdown=$(g settings get secure always_on_vpn_lockdown | sed 's/^null$/0/')"
     echo "tunnel_iface=$(g "ip -o -4 addr | grep -cE ' tun[0-9]'")"
@@ -87,7 +100,15 @@ expect() {   # $1 = profile
         check "packet_filter"              "$(value "$s" packet_filter)" "inbound=1 discovery=1"
         check "mac_flag"                   "$(value "$s" mac_flag)" 1
         check "dhcp_hostname_restriction"  "$(value "$s" dhcp_hostname_restriction)" 3
-        [ "$(value "$s" inbound_rules)" -gt 0 ] && ok "inbound rules present" || bad "no inbound rules"
+        local rules; rules=$(value "$s" inbound_rules)
+        if [ "$rules" = "n/a" ]; then skip "inbound rules"
+        elif [ "$rules" -gt 0 ]; then ok "inbound rules present"
+        else bad "no inbound rules"; fi
+        # Functional proof of the telemetry sinkhole, readable without root: a
+        # blocklisted name must resolve to nowhere. (ping prints the unspecified
+        # address as 127.0.0.1.)
+        g "ping -c 1 -W 1 $CANARY 2>&1 | head -1" | grep -qE "\((127\.0\.0\.1|0\.0\.0\.0)\)" &&
+            ok "blocklisted name resolves to nowhere" || bad "blocklisted name still resolves under $1"
     fi
     check "bluetooth_on" "$(value "$s" bluetooth_on)" "$bt"
     [ "$(value "$s" no_camera)" -gt 0 ] && c=1 || c=0
@@ -101,8 +122,9 @@ expect() {   # $1 = profile
 }
 
 adb root > /dev/null 2>&1; sleep 3; adb wait-for-device
+[ "$(g id -u)" = "0" ] && ROOT=1
 echo "== device: $(g getprop ro.build.fingerprint)"
-echo "   build type $(g getprop ro.build.type), SELinux $(g getenforce)"
+echo "   build type $(g getprop ro.build.type), SELinux $(g getenforce), adb root: $([ "$ROOT" = 1 ] && echo yes || echo "no (root-only checks will be skipped)")"
 g svc bluetooth enable > /dev/null; sleep 6      # so bluetooth_off has something to turn off
 apply normal > /dev/null
 
@@ -160,13 +182,19 @@ else
 fi
 
 echo "== SELinux denials involving Umbra"
-denials=$(g "dmesg | grep -i 'avc.*denied' | grep -iE 'umbra|netutils'" | sed 's/.*avc: *//; s/pid=[0-9]* //; s/ino=[0-9]* //' | sort -u)
-if [ -z "$denials" ]; then ok "none"; else bad "denials found:"; echo "$denials" | cut -c1-240 | sed 's/^/        /'; fi
+if [ "$ROOT" = 1 ]; then
+    denials=$(g "dmesg | grep -i 'avc.*denied' | grep -iE 'umbra|netutils'" | sed 's/.*avc: *//; s/pid=[0-9]* //; s/ino=[0-9]* //' | sort -u)
+    if [ -z "$denials" ]; then ok "none"; else bad "denials found:"; echo "$denials" | cut -c1-240 | sed 's/^/        /'; fi
+else
+    skip "kernel log"
+fi
 
 echo "== crashes"
 crashes=$(g "logcat -d -b crash" | grep -cE "FATAL EXCEPTION|com.forrestlasiter.umbra")
 [ "$crashes" = 0 ] && ok "none" || bad "$crashes crash log line(s) mention Umbra or a fatal exception"
 
 echo
-if [ "$fails" = 0 ]; then echo "RESULT: PASS"; else echo "RESULT: FAIL ($fails check(s))"; fi
+note=""
+[ "$skipped" -gt 0 ] && note=" ($skipped check(s) skipped for lack of adb root)"
+if [ "$fails" = 0 ]; then echo "RESULT: PASS$note"; else echo "RESULT: FAIL ($fails check(s))$note"; fi
 exit $((fails > 0))
