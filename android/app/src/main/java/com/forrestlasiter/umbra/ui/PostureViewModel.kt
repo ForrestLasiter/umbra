@@ -6,6 +6,7 @@ import com.forrestlasiter.umbra.core.CoreSpec
 import com.forrestlasiter.umbra.core.PosturePlan
 import com.forrestlasiter.umbra.core.PostureEngine
 import com.forrestlasiter.umbra.core.SpecRepository
+import com.forrestlasiter.umbra.system.AuditItem
 import com.forrestlasiter.umbra.system.PostureApplier
 import com.forrestlasiter.umbra.system.SystemMode
 import com.forrestlasiter.umbra.system.SystemPosture
@@ -28,6 +29,9 @@ data class PostureUiState(
     val wgEndpoint: String? = null,
     val message: String? = null,
     val error: String? = null,
+    // System build: the last measurement of the active posture (null = not measured yet).
+    val audit: List<AuditItem>? = null,
+    val auditProfile: String? = null,
 )
 
 /**
@@ -85,6 +89,11 @@ class PostureViewModel(app: Application) : AndroidViewModel(app) {
     fun setActive(active: Boolean) { _state.value = _state.value.copy(active = active) }
 
     fun setMessage(msg: String?) { _state.value = _state.value.copy(message = msg) }
+
+    /** Record a measurement of [profile] (or clear it with null). */
+    fun setAudit(profile: String?, items: List<AuditItem>?) {
+        _state.value = _state.value.copy(audit = items, auditProfile = profile)
+    }
 
     /** Import a WireGuard config the user picked. Sets a user-facing message. */
     fun importWgConfig(text: String) {

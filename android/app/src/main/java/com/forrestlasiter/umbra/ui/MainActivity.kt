@@ -22,7 +22,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.forrestlasiter.umbra.core.Enforcement
 import com.forrestlasiter.umbra.core.PlannedAction
 import com.forrestlasiter.umbra.core.PostureItem
+import com.forrestlasiter.umbra.system.AuditItem
 import com.forrestlasiter.umbra.system.PostureApplier
+import com.forrestlasiter.umbra.system.PostureReport
 import com.forrestlasiter.umbra.system.SystemPosture
 import com.forrestlasiter.umbra.tor.OrbotHelper
 import com.forrestlasiter.umbra.vpn.SinkholeStats
@@ -140,6 +142,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            // OS build: what was applied can drift, so show a fresh measurement.
+            if (state.systemBuild && state.active) {
+                LaunchedEffect(Unit) { if (state.audit == null) measure() }
+                AuditCard(state.auditProfile, state.audit, onCheck = { measure() })
+            }
+
             HorizontalDivider()
             Text("What ${state.selected} means on this device",
                 style = MaterialTheme.typography.titleMedium)
@@ -168,6 +176,7 @@ class MainActivity : ComponentActivity() {
             if (system != null && tunnels.modeFor(plan) == TunnelMode.NONE) {
                 vm.setActive(true)
                 vm.setMessage(systemNote)
+                vm.setAudit(SystemPosture.activeProfile(this), SystemPosture.audit(this))
                 return@inBackground
             }
             val error = tunnels.activate(profile, plan)
@@ -188,7 +197,51 @@ class MainActivity : ComponentActivity() {
             // (returns null) on a normal install.
             val restored = SystemPosture.apply(this, PostureApplier.NORMAL)
             vm.setActive(false)
+            vm.setAudit(null, null)
             if (restored != null) vm.setMessage(SystemPosture.summarize(PostureApplier.NORMAL, restored))
+        }
+    }
+
+    /** Measure the active posture on the posture thread and show the result. */
+    private fun measure() {
+        SystemPosture.inBackground {
+            vm.setAudit(SystemPosture.activeProfile(this), SystemPosture.audit(this))
+        }
+    }
+
+    /**
+     * "Is it holding?" -- one line per control the active profile enforces here,
+     * from a measurement taken now, not from what was applied earlier. Each state
+     * is spelled out in words, so it does not depend on telling colours apart.
+     */
+    @Composable
+    private fun AuditCard(profile: String?, items: List<AuditItem>?, onCheck: () -> Unit) {
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Is it holding?", fontWeight = FontWeight.SemiBold)
+                if (items == null || profile == null) {
+                    Text("Measuring…", style = MaterialTheme.typography.bodySmall)
+                } else {
+                    Text(PostureReport.summarizeAudit(profile, items),
+                        style = MaterialTheme.typography.bodySmall)
+                    items.forEach { item ->
+                        val (label, color) = when (item.holding) {
+                            true -> "holding" to MaterialTheme.colorScheme.primary
+                            false -> "DRIFTED" to MaterialTheme.colorScheme.error
+                            null -> "not enforced" to MaterialTheme.colorScheme.tertiary
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(item.capability, style = MaterialTheme.typography.bodyMedium)
+                            Text(label, color = color, style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold)
+                        }
+                        if (item.holding != true && item.note != null) {
+                            Text(item.note, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+                OutlinedButton(onClick = onCheck) { Text("Check again") }
+            }
         }
     }
 
