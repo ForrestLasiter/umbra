@@ -194,6 +194,31 @@ for profile in home travel paranoid travel home paranoid; do
     audit
 done
 
+# The user's own encrypted DNS choice (Android's Private DNS, "strict" mode with
+# a named server) under the WireGuard profile. With lockdown on, a lookup can
+# only succeed if the encrypted DNS connection travels inside the tunnel.
+if [ -n "$CONF" ]; then
+    echo "== encrypted DNS chosen by the user (Quad9), under home"
+    dns_mode_was=$(g settings get global private_dns_mode)
+    dns_host_was=$(g settings get global private_dns_specifier)
+    g settings put global private_dns_specifier dns.quad9.net
+    g settings put global private_dns_mode hostname
+    apply home > /dev/null
+    sleep 8
+    web=0
+    for _try in 1 2 3; do
+        [ "$(g "curl -s -o /dev/null -w '%{http_code}' --max-time 30 https://example.org")" = 200 ] && { web=1; break; }
+        sleep 5
+    done
+    [ $web = 1 ] && ok "web reachable under home with encrypted DNS set to Quad9" ||
+        bad "web NOT reachable under home with encrypted DNS set to Quad9"
+    if [ "$dns_host_was" = null ]; then g settings delete global private_dns_specifier > /dev/null
+    else g settings put global private_dns_specifier "$dns_host_was"; fi
+    if [ "$dns_mode_was" = null ]; then g settings delete global private_dns_mode > /dev/null
+    else g settings put global private_dns_mode "$dns_mode_was"; fi
+    apply paranoid > /dev/null      # where the profile loop left off
+fi
+
 # Drift: change a setting behind Umbra's back. The audit must notice, and
 # re-applying the same profile must put it right.
 echo "== drift detection (under paranoid)"
