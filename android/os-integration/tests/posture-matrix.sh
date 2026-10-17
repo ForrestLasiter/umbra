@@ -124,10 +124,17 @@ expect() {   # $1 = profile
     if [ "$tor" = 1 ]; then
         # Tor carries TCP only, so ping proves nothing here. Ask the Tor
         # Project's own check service where this phone appears to come from.
-        g "curl -s --max-time 45 https://check.torproject.org/api/ip" | grep -q '"IsTor":true' &&
-            ok "exit address is a Tor exit" || bad "exit address is NOT a Tor exit under $1"
-        [ "$(g "curl -s -o /dev/null -w '%{http_code}' --max-time 45 https://example.org")" = 200 ] &&
-            ok "internet reachable and names resolve, through Tor" || bad "internet NOT reachable through Tor under $1"
+        # Tor may still be building its first route when this runs. Three tries
+        # (up to about 2.5 minutes) tell a slow start from a broken tunnel.
+        istor=0; web=0
+        for _try in 1 2 3; do
+            [ $istor = 1 ] || { g "curl -s --max-time 45 https://check.torproject.org/api/ip" | grep -q '"IsTor":true' && istor=1; }
+            [ $web = 1 ] || { [ "$(g "curl -s -o /dev/null -w '%{http_code}' --max-time 45 https://example.org")" = 200 ] && web=1; }
+            [ $istor = 1 ] && [ $web = 1 ] && break
+            sleep 10
+        done
+        [ $istor = 1 ] && ok "exit address is a Tor exit" || bad "exit address is NOT a Tor exit under $1"
+        [ $web = 1 ] && ok "internet reachable and names resolve, through Tor" || bad "internet NOT reachable through Tor under $1"
         return
     fi
     # The network must still work under every profile (through the tunnel, if any).
