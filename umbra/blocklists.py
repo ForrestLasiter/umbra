@@ -24,6 +24,33 @@ TELEMETRY_BLOCKLISTS: dict[str, list[str]] = {
         "app-measurement.com",
         "graph.facebook.com",
     ],
+    # Analytics, crash-reporting, attribution and ad SDKs that many phone apps
+    # embed. Each entry also covers its subdomains. Blocking them stops apps
+    # reporting what you do in them; the apps themselves keep working, though
+    # ads may not load and links that open an app through an attribution
+    # service (Branch, AppsFlyer, Adjust) may land on a web page instead. Used
+    # by every profile that sinkholes telemetry (an OS build bakes all lists into
+    # one hosts file, so the lists cannot differ between those profiles).
+    "mobile-trackers": [
+        "firebase-settings.crashlytics.com",
+        "crashlyticsreports-pa.googleapis.com",
+        "googleads.g.doubleclick.net",
+        "pagead2.googlesyndication.com",
+        "adservice.google.com",
+        "appsflyer.com",
+        "adjust.com",
+        "branch.io",
+        "api.mixpanel.com",
+        "api.amplitude.com",
+        "api.segment.io",
+        "ingest.sentry.io",
+        "notify.bugsnag.com",
+        "sessions.bugsnag.com",
+        "applovin.com",
+        "unityads.unity3d.com",
+        "ads.mopub.com",
+        "an.facebook.com",
+    ],
 }
 
 

@@ -38,6 +38,6 @@ modules:
     enabled: false
   telemetry:
     enabled: true
-    blocklists: [os, common-trackers]
+    blocklists: [os, common-trackers, mobile-trackers]
     egress: blocklist
     disable_os_telemetry: true

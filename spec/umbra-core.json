@@ -307,6 +307,26 @@
       "app-measurement.com",
       "graph.facebook.com"
     ],
+    "mobile-trackers": [
+      "firebase-settings.crashlytics.com",
+      "crashlyticsreports-pa.googleapis.com",
+      "googleads.g.doubleclick.net",
+      "pagead2.googlesyndication.com",
+      "adservice.google.com",
+      "appsflyer.com",
+      "adjust.com",
+      "branch.io",
+      "api.mixpanel.com",
+      "api.amplitude.com",
+      "api.segment.io",
+      "ingest.sentry.io",
+      "notify.bugsnag.com",
+      "sessions.bugsnag.com",
+      "applovin.com",
+      "unityads.unity3d.com",
+      "ads.mopub.com",
+      "an.facebook.com"
+    ],
     "os": [
       "incoming.telemetry.mozilla.org",
       "metrics.mozilla.org"
@@ -314,7 +334,7 @@
   },
   "profiles": {
     "home": {
-      "description": "Sane hardening for a trusted LAN. Blocks telemetry and local discovery, raises a stealth firewall, and randomizes the MAC per network \u2014 while staying usable (no killswitch, no radios off).\n",
+      "description": "Sane hardening for a trusted LAN. Blocks telemetry and local discovery, raises a stealth firewall, and randomizes the MAC per network \u00e2\u20ac\u201d while staying usable (no killswitch, no radios off).\n",
       "fail_mode": "open",
       "requires": [
         "firewall",
@@ -327,7 +347,8 @@
       ],
       "telemetry_blocklists": [
         "os",
-        "common-trackers"
+        "common-trackers",
+        "mobile-trackers"
       ],
       "modules": {
         "kernel": {
@@ -369,7 +390,8 @@
           "enabled": true,
           "blocklists": [
             "os",
-            "common-trackers"
+            "common-trackers",
+            "mobile-trackers"
           ],
           "egress": "blocklist",
           "disable_os_telemetry": true
@@ -377,7 +399,7 @@
       }
     },
     "normal": {
-      "description": "Baseline. Every control off / asserting nothing. Applying this profile is the supported way to \"return the machine to stock\" \u2014 it restores the snapshots of whatever the previously active profile changed.\n",
+      "description": "Baseline. Every control off / asserting nothing. Applying this profile is the supported way to \"return the machine to stock\" \u00e2\u20ac\u201d it restores the snapshots of whatever the previously active profile changed.\n",
       "fail_mode": "open",
       "requires": [],
       "telemetry_blocklists": [],
@@ -413,7 +435,8 @@
       ],
       "telemetry_blocklists": [
         "os",
-        "common-trackers"
+        "common-trackers",
+        "mobile-trackers"
       ],
       "modules": {
         "kernel": {
@@ -462,7 +485,8 @@
           "enabled": true,
           "blocklists": [
             "os",
-            "common-trackers"
+            "common-trackers",
+            "mobile-trackers"
           ],
           "egress": "blocklist",
           "disable_os_telemetry": true
@@ -485,7 +509,8 @@
       ],
       "telemetry_blocklists": [
         "os",
-        "common-trackers"
+        "common-trackers",
+        "mobile-trackers"
       ],
       "modules": {
         "kernel": {
@@ -534,7 +559,8 @@
           "enabled": true,
           "blocklists": [
             "os",
-            "common-trackers"
+            "common-trackers",
+            "mobile-trackers"
           ],
           "egress": "blocklist",
           "disable_os_telemetry": true
