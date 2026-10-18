@@ -43,7 +43,7 @@ def test_spec_ships_shared_telemetry_blocklists():
     assert any("google-analytics" in d for d in lists["common-trackers"])
     assert "mobile-trackers" in lists
     # home selects the lists; the app unions them into its DNS filter.
-    assert doc["profiles"]["home"]["telemetry_blocklists"] == ["os", "common-trackers", "mobile-trackers"]
+    assert doc["profiles"]["home"]["telemetry_blocklists"] == ["os", "common-trackers", "mobile-trackers", "stalkerware"]
     # a profile that doesn't sinkhole telemetry exposes an empty selection
     assert doc["profiles"]["normal"]["telemetry_blocklists"] == []
 
