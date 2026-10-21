@@ -19,11 +19,17 @@ TELEMETRY_BLOCKLISTS: dict[str, list[str]] = {
         # Common OS/vendor telemetry endpoints (illustrative, edit freely).
         "incoming.telemetry.mozilla.org",
         "metrics.mozilla.org",
+        "mobile.events.data.microsoft.com",
+        "self.events.data.microsoft.com",
+        "vortex.data.microsoft.com",
     ],
     "common-trackers": [
         "www.google-analytics.com",
         "analytics.google.com",
         "app-measurement.com",
+        "region1.app-measurement.com",
+        "ssl.google-analytics.com",
+        "stats.g.doubleclick.net",
         "graph.facebook.com",
     ],
     # Analytics, crash-reporting, attribution and ad SDKs that many phone apps
@@ -47,6 +53,10 @@ TELEMETRY_BLOCKLISTS: dict[str, list[str]] = {
         "ingest.sentry.io",
         "notify.bugsnag.com",
         "sessions.bugsnag.com",
+        "settings.crashlytics.com",
+        "in.appcenter.ms",
+        "mobile-collector.newrelic.com",
+        "android.bugly.qq.com",
         # Google ads
         "googleads.g.doubleclick.net",
         "pagead2.googlesyndication.com",
@@ -68,6 +78,8 @@ TELEMETRY_BLOCKLISTS: dict[str, list[str]] = {
         "s2s.adjust.com",
         "gdpr.adjust.com",
         "subscription.adjust.com",
+        "control.kochava.com",
+        "sdk-api-v1.singular.net",
         "branch.io",
         "api.branch.io",
         "api2.branch.io",
@@ -80,6 +92,10 @@ TELEMETRY_BLOCKLISTS: dict[str, list[str]] = {
         "api2.amplitude.com",
         "api.segment.io",
         "cdn.segment.com",
+        "data.flurry.com",
+        "startup.mobile.yandex.net",
+        "report.appmetrica.yandex.net",
+        "ulogs.umeng.com",
         # Ad networks
         "applovin.com",
         "a.applovin.com",
@@ -94,6 +110,8 @@ TELEMETRY_BLOCKLISTS: dict[str, list[str]] = {
         "publisher-config.unityads.unity3d.com",
         "ads.mopub.com",
         "an.facebook.com",
+        "live.chartboost.com",
+        "z.moatads.com",
     ],
     # Servers that known stalkerware reports to (Echap's stalkerware-indicators,
     # CC-BY 4.0; see umbra/blocklist_stalkerware.py). Exact names, so they work
