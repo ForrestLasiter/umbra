@@ -41,10 +41,22 @@ def test_spec_ships_shared_telemetry_blocklists():
     lists = doc["telemetry_blocklists"]
     assert "os" in lists and "common-trackers" in lists
     assert any("google-analytics" in d for d in lists["common-trackers"])
-    # home selects both lists; the app unions them into its DNS filter.
-    assert doc["profiles"]["home"]["telemetry_blocklists"] == ["os", "common-trackers"]
+    assert "mobile-trackers" in lists
+    # home selects the lists; the app unions them into its DNS filter.
+    assert doc["profiles"]["home"]["telemetry_blocklists"] == ["os", "common-trackers", "mobile-trackers", "stalkerware"]
     # a profile that doesn't sinkhole telemetry exposes an empty selection
     assert doc["profiles"]["normal"]["telemetry_blocklists"] == []
+
+
+def test_every_sinkholing_profile_selects_every_list():
+    # An Android OS build bakes ALL lists into one hosts file (spec.build_sinkhole_hosts),
+    # so on a phone every profile that sinkholes telemetry blocks all of them. The
+    # profiles must say the same, or Linux and the phone would block different things.
+    doc = spec.build_spec()
+    every = sorted(doc["telemetry_blocklists"])
+    for name, profile in doc["profiles"].items():
+        chosen = profile["telemetry_blocklists"]
+        assert chosen == [] or sorted(chosen) == every, name
 
 
 def test_enforcement_levels_are_complete_and_described():

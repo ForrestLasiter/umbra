@@ -60,7 +60,15 @@ interface WireGuardTunnel {
 class SystemAlwaysOnVpn(context: Context) : AlwaysOnVpn {
 
     private val manager: VpnManager? = context.getSystemService(VpnManager::class.java)
-    private val userId: Int = Process.myUserHandle().hashCode()     // UserHandle.getIdentifier()
+    // UserHandle.getIdentifier() is a system API, so reflection again; hashCode()
+    // happens to return the same number and is kept only as a fallback.
+    private val userId: Int = Process.myUserHandle().let { handle ->
+        try {
+            handle.javaClass.getMethod("getIdentifier").invoke(handle) as Int
+        } catch (e: Exception) {
+            handle.hashCode()
+        }
+    }
 
     override fun authorize(packageName: String): Boolean = call(
         "setVpnPackageAuthorization",
@@ -179,9 +187,12 @@ class WireGuardControl(
     override fun restore(prior: String): Boolean {
         // Lockdown off first, then the tunnel: the other order would strand the
         // phone offline behind a killswitch with no tunnel.
-        val released = slot.release(packageName)
+        // If lockdown could not be released, keep the tunnel: taking it down would
+        // leave the killswitch pointing at nothing and the phone offline. The
+        // snapshot stays, so the next `normal` retries both.
+        if (!slot.release(packageName)) return false
         try { tunnel.down() } catch (e: Exception) { lastError = e.message ?: e.toString() }
-        return released && !tunnel.isUp
+        return !tunnel.isUp
     }
 
     override fun isEnforced(): Boolean? {
