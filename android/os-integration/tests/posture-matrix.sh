@@ -135,6 +135,13 @@ expect() {   # $1 = profile
         done
         [ $istor = 1 ] && ok "exit address is a Tor exit" || bad "exit address is NOT a Tor exit under $1"
         [ $web = 1 ] && ok "internet reachable and names resolve, through Tor" || bad "internet NOT reachable through Tor under $1"
+        # A failure here has been seen once in a while after a reboot: keep what explains it.
+        if [ $istor = 0 ] || [ $web = 0 ]; then
+            echo "  -- Tor did not work; the phone's view of it:"
+            g "ip -o -4 addr" | cut -c1-90 | sed 's/^/     /'
+            g "dumpsys connectivity" | grep -a -E "(VPN|WIFI|MOBILE) (CONNECTED|DISCONNECTED|CONNECTING)" | cut -c1-150 | sed 's/^/     /'
+            g "logcat -d" | grep -a -E "OrbotService|UmbraPosture" | grep -a -E "Bootstrapped|VPN|Vpn|tor:|error|Error" | tail -30 | cut -c1-170 | sed 's/^/     /'
+        fi
         return
     fi
     # The network must still work under every profile (through the tunnel, if any).
