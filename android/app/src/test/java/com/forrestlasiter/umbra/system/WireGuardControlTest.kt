@@ -58,6 +58,21 @@ class WireGuardControlTest {
         assertEquals(false, wireguard.isEnforced())
     }
 
+    @Test fun restore_keeps_the_tunnel_when_lockdown_cannot_be_lifted() {
+        val alwaysOn = FakeAlwaysOn(events = events)
+        val tunnel = FakeTunnel(events = events)
+        val wireguard = control(alwaysOn, tunnel)
+        val prior = wireguard.snapshot()!!
+        wireguard.enforce()
+        events.clear()
+        alwaysOn.refuseSet = true
+        assertFalse(wireguard.restore(prior))
+        // Taking the tunnel down now would leave the killswitch pointing at
+        // nothing: the phone would be offline. It stays up for a retry.
+        assertTrue(tunnel.isUp)
+        assertEquals(emptyList<String>(), events)
+    }
+
     @Test fun another_vpn_app_that_was_always_on_gets_its_place_back() {
         val alwaysOn = FakeAlwaysOn(app = "com.example.vpn", lockdown = true, events = events)
         val wireguard = control(alwaysOn, FakeTunnel(events = events))

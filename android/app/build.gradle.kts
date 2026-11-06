@@ -45,7 +45,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
     // Official WireGuard userspace backend (libwg-go). minSdk 26 has java.time /
     // Optional natively, so no core-library desugaring is required.
-    implementation("com.wireguard.android:tunnel:1.0.20230706")
+    implementation("com.wireguard.android:tunnel:1.0.20260102")
 
     testImplementation("junit:junit:4.13.2")
 }
