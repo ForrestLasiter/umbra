@@ -205,20 +205,33 @@ done
 # a named server) under the WireGuard profile. With lockdown on, a lookup can
 # only succeed if the encrypted DNS connection travels inside the tunnel.
 if [ -n "$CONF" ]; then
-    echo "== encrypted DNS chosen by the user (Quad9), under home"
     dns_mode_was=$(g settings get global private_dns_mode)
     dns_host_was=$(g settings get global private_dns_specifier)
     g settings put global private_dns_specifier dns.quad9.net
     g settings put global private_dns_mode hostname
-    apply home > /dev/null
-    sleep 8
-    web=0
-    for _try in 1 2 3; do
-        [ "$(g "curl -s -o /dev/null -w '%{http_code}' --max-time 30 https://example.org")" = 200 ] && { web=1; break; }
-        sleep 5
+    # home: the tunnel without lockdown; travel: the tunnel with lockdown, where
+    # nothing outside the tunnel may leave the phone at all.
+    for profile in home travel; do
+        echo "== encrypted DNS chosen by the user (Quad9), under $profile"
+        apply "$profile" > /dev/null
+        sleep 8
+        web=0
+        for _try in 1 2 3; do
+            [ "$(g "curl -s -o /dev/null -w '%{http_code}' --max-time 30 https://example.org")" = 200 ] && { web=1; break; }
+            sleep 5
+        done
+        [ $web = 1 ] && ok "web reachable under $profile with encrypted DNS set to Quad9" ||
+            bad "web NOT reachable under $profile with encrypted DNS set to Quad9"
+        # A name never looked up before (a random label under a wildcard name
+        # that always means 127.0.0.1), so no cache can answer: the lookup itself
+        # must go out encrypted and come back.
+        name="u$(date +%s)$RANDOM.127.0.0.1.nip.io"
+        res=$(g "ping -c 1 -W 10 $name" | head -1)
+        case "$res" in
+            *"(127.0.0.1)"*) ok "fresh lookup under $profile answered" ;;
+            *) bad "fresh lookup under $profile not answered: $res" ;;
+        esac
     done
-    [ $web = 1 ] && ok "web reachable under home with encrypted DNS set to Quad9" ||
-        bad "web NOT reachable under home with encrypted DNS set to Quad9"
     if [ "$dns_host_was" = null ]; then g settings delete global private_dns_specifier > /dev/null
     else g settings put global private_dns_specifier "$dns_host_was"; fi
     if [ "$dns_mode_was" = null ]; then g settings delete global private_dns_mode > /dev/null
